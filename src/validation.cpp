@@ -51,9 +51,9 @@
 #include <boost/thread.hpp>
 
 #ifdef ENABLE_GPoW
-    #include "gpow.h"
-    #include "GNonces.h"
-    #include "OurChain/gpowserver.h"
+#include "GNonces.h"
+#include "OurChain/gpowserver.h"
+#include "gpow.h"
 #endif
 
 #if defined(NDEBUG)
@@ -109,42 +109,42 @@ struct CBlockIndexWorkComparator {
     bool operator()(const CBlockIndex* pa, const CBlockIndex* pb) const
     {
 #ifdef ENABLE_GPoW
-            // First sort by most total work, ...
-            //LogPrintf("Check nChainWork: pa->%s, pb->%s\n", ArithToUint256(pa->nChainWork).ToString().c_str(), ArithToUint256(pb->nChainWork).ToString().c_str());
-            if (pa->nChainWork > pb->nChainWork) return false;
-            if (pa->nChainWork < pb->nChainWork) return true;
+        // First sort by most total work, ...
+        // LogPrintf("Check nChainWork: pa->%s, pb->%s\n", ArithToUint256(pa->nChainWork).ToString().c_str(), ArithToUint256(pb->nChainWork).ToString().c_str());
+        if (pa->nChainWork > pb->nChainWork) return false;
+        if (pa->nChainWork < pb->nChainWork) return true;
 
-            if (pa->GetBlockTime() < pb->GetBlockTime()) return false;
-            if (pa->GetBlockTime() > pb->GetBlockTime()) return true;
+        if (pa->GetBlockTime() < pb->GetBlockTime()) return false;
+        if (pa->GetBlockTime() > pb->GetBlockTime()) return true;
 
-            if (pa->GetPrecisionBlockTime() < pb->GetPrecisionBlockTime()) {
+        if (pa->GetPrecisionBlockTime() < pb->GetPrecisionBlockTime()) {
             if (pb->GetPrecisionBlockTime() - pa->GetPrecisionBlockTime() > TIME_ERROR) // more than time error
                 return false;
-            }
-            if (pa->GetPrecisionBlockTime() > pb->GetPrecisionBlockTime()) {
-                if (pa->GetPrecisionBlockTime() - pb->GetPrecisionBlockTime() > TIME_ERROR) // more than time error
-                    return true;
-            }
+        }
+        if (pa->GetPrecisionBlockTime() > pb->GetPrecisionBlockTime()) {
+            if (pa->GetPrecisionBlockTime() - pb->GetPrecisionBlockTime() > TIME_ERROR) // more than time error
+                return true;
+        }
 
-            // ... Compare GPoW, Smaller GPoW win ...
-            CBlockHeader ba, bb;
-            ba = pa->GetBlockHeader();
-            bb = pb->GetBlockHeader();
-            if (UintToArith256(ba.hashGPoW) < UintToArith256(bb.hashGPoW)) return false;
-            if (UintToArith256(ba.hashGPoW) > UintToArith256(bb.hashGPoW)) return true;
-            
+        // ... Compare GPoW, Smaller GPoW win ...
+        CBlockHeader ba, bb;
+        ba = pa->GetBlockHeader();
+        bb = pb->GetBlockHeader();
+        if (UintToArith256(ba.hashGPoW) < UintToArith256(bb.hashGPoW)) return false;
+        if (UintToArith256(ba.hashGPoW) > UintToArith256(bb.hashGPoW)) return true;
+
 #else
-            // First sort by most total work, ...
-            if (pa->nChainWork > pb->nChainWork) return false;
-            if (pa->nChainWork < pb->nChainWork) return true;
+        // First sort by most total work, ...
+        if (pa->nChainWork > pb->nChainWork) return false;
+        if (pa->nChainWork < pb->nChainWork) return true;
 
-            // ... then by earliest time received, ...
-            if (pa->nSequenceId < pb->nSequenceId) return false;
-            if (pa->nSequenceId > pb->nSequenceId) return true;
+        // ... then by earliest time received, ...
+        if (pa->nSequenceId < pb->nSequenceId) return false;
+        if (pa->nSequenceId > pb->nSequenceId) return true;
 
-#endif //ENABLE_GPoW
-        // Use pointer address as tie breaker (should only happen with blocks
-        // loaded from disk, as those all have id 0).
+#endif // ENABLE_GPoW
+       //  Use pointer address as tie breaker (should only happen with blocks
+       //  loaded from disk, as those all have id 0).
         if (pa < pb) return false;
         if (pa > pb) return true;
 
@@ -2382,20 +2382,20 @@ static bool ActivateBestChainStep(CValidationState& state, const CChainParams& c
             }
         }
     }
-    
+
     if (fBlocksDisconnected) {
         // If any blocks were disconnected, disconnectpool may be non empty.  Add
         // any disconnected transactions back to the mempool.
         UpdateMempoolForReorg(disconnectpool, true);
     }
     mempool.check(pcoinsTip);
-    
+
     // Callbacks/notifications for a new best chain.
     if (fInvalidFound)
         CheckForkWarningConditionsOnNewFork(vpindexToConnect.back());
     else
         CheckForkWarningConditions();
-    
+
     return true;
 }
 
@@ -2495,7 +2495,6 @@ bool ActivateBestChain(CValidationState& state, const CChainParams& chainparams,
     }
 
     {
-        LOCK(cs_main);
         ContractStateCache contractStateCache;
         ContractObserver observer(&contractStateCache);
         if (!observer.onChainStateSet(chainActive, chainparams.GetConsensus())) {

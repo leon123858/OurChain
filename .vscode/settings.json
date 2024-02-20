@@ -69,6 +69,16 @@
     "cinttypes": "cpp",
     "typeindex": "cpp",
     "typeinfo": "cpp",
-    "valarray": "cpp"
+    "valarray": "cpp",
+    "bit": "cpp",
+    "compare": "cpp",
+    "concepts": "cpp",
+    "netfwd": "cpp",
+    "random": "cpp",
+    "numbers": "cpp",
+    "ranges": "cpp",
+    "semaphore": "cpp",
+    "stop_token": "cpp",
+    "variant": "cpp"
   }
 }

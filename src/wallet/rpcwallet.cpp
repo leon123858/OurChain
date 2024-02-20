@@ -29,6 +29,7 @@
 #include "wallet/walletdb.h"
 #include "warnings.h"
 
+#include <dirent.h>
 #include <fstream>
 #include <stdint.h>
 #include <sys/wait.h>

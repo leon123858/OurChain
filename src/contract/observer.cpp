@@ -8,24 +8,28 @@ ContractObserver::ContractObserver(ContractStateCache* cache)
 
 bool ContractObserver::onChainStateSet(CChain& chainActive, const Consensus::Params consensusParams)
 {
-    auto curUpdateStrategy = updateStrategyFactory.createUpdateStrategy(chainActive, cache);
-    if (curUpdateStrategy->getName() == UpdateStrategyType::UpdateStrategyTypeUnDo) {
-        return true;
-    }
-    auto snapshot = cache->getSnapShot();
-    if (!curUpdateStrategy->UpdateSnapShot(*cache, *snapshot, chainActive, consensusParams)) {
-        LogPrintf("snapshot: update\n");
-        return false;
-    }
-    auto curHeight = cache->getBlockCache()->getHeighestBlock().blockHeight;
-    if (isSaveCheckPointNow(curHeight)) {
-        cache->saveCheckPoint();
-    }
-    if (isSaveReadReplicaNow(curHeight)) {
-        cache->saveTmpState();
+    int curHeight = 0;
+    {
+        LOCK(cs_main);
+        auto curUpdateStrategy = updateStrategyFactory.createUpdateStrategy(chainActive, cache);
+        if (curUpdateStrategy->getName() == UpdateStrategyType::UpdateStrategyTypeUnDo) {
+            return true;
+        }
+        auto snapshot = cache->getSnapShot();
+        if (!curUpdateStrategy->UpdateSnapShot(*cache, *snapshot, chainActive, consensusParams)) {
+            LogPrintf("snapshot: update\n");
+            return false;
+        }
+        curHeight = cache->getBlockCache()->getHeighestBlock().blockHeight;
+        if (isSaveCheckPointNow(curHeight)) {
+            cache->saveCheckPoint();
+        }
+        if (isSaveReadReplicaNow(curHeight)) {
+            cache->saveTmpState();
+        }
     }
     if (isClearCheckPointNow(curHeight)) {
-        cache->clearCheckPoint(100);
+        cache->clearCheckPoint(10);
     }
     return true;
 }
@@ -34,9 +38,7 @@ bool ContractObserver::isSaveCheckPointNow(int height)
 {
     if (height == 0)
         return false;
-    if (height % 10 == 0)
-        return true;
-    return false;
+    return true;
 }
 
 bool ContractObserver::isSaveReadReplicaNow(int height)
@@ -48,7 +50,7 @@ bool ContractObserver::isClearCheckPointNow(int height)
 {
     if (height == 0)
         return false;
-    if (height % 100 == 0)
+    if (height % 10 == 0)
         return true;
     return false;
 }

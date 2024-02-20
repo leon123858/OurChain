@@ -129,7 +129,7 @@ bool StartGPoWServer()
     // Tune start time
     TuneRoundStartTime();
     THIS_ROUND_START = GetAdjustedTime();
-    fAllowedMining = true;
+    fAllowedMining = false; // This might make mistake if immediate mining after starting bitcoind
 
     event_add(eventGPoW, &tv);
     threadGPoW = new std::thread([&]() {

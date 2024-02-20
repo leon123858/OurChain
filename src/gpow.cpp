@@ -14,7 +14,7 @@ using namespace std;
 
 #include "gpow.h"
 
-int DEBUG=1;
+int Debug=1;
 bool (*CONDITION)();
 
 uint8_t NONCE_TYPE;            // :1　not Conservative :1 not Compressed :4 Bit Size (max 15)

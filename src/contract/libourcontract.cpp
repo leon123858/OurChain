@@ -1,16 +1,15 @@
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <linux/limits.h>
+#include <signal.h>
 #include <stack>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <unistd.h>
 // #include <boost/uuid/uuid.hpp>
 // #include <boost/uuid/uuid_generators.hpp>
 
@@ -139,9 +138,9 @@ bool check_runtime_can_write_db()
         err_printf("check_runtime_can_write_db: read mode code error\n");
         return false;
     }
-    if (flag == 1) {
+    if (flag == BYTE_WRITE_STATE) {
         return true; // only 1 can write state to db
-    } else if (flag == 0) {
+    } else if (flag == BYTE_READ_STATE) {
         return false;
     }
     err_printf("check_runtime_can_write_db: read mode code error\n");
@@ -250,6 +249,14 @@ json pre_state_read()
     return call_stack.top()->getPreState();
 }
 
+void general_interface_write(std::string protocol, std::string version)
+{
+    json j;
+    j["protocol"] = protocol;
+    j["version"] = version;
+    state_write(j);
+}
+
 std::string get_pre_txid()
 {
     int flag = GET_PRE_TXID_STATE;
@@ -266,4 +273,121 @@ std::string get_pre_txid()
         return "";
     }
     return std::string(buf, 64);
+}
+
+/* Contract daemon */
+std::string contract_daemon()
+{
+    /* Send command */
+    int flag = CONTRACT_DAEMON;
+    if (fwrite((void*)&flag, sizeof(int), 1, out) <= 0) {
+        err_printf("contract_daemon: write control code error\n");
+        return "";
+    }
+    fflush(out);
+
+    char buf[151];
+    int ret = fread((void*)&buf, sizeof(char) * 150, 1, in);
+    if (ret <= 0) {
+        err_printf("contract daemon: read error\n");
+        return "";
+    }
+
+    pid_t pid;
+    pid = fork();
+    if (pid != 0) {
+        if (fwrite((void*)&pid, sizeof(int), 1, out) <= 0) {
+            err_printf("contract_daemon: write pid failed\n");
+            return "";
+        }
+        fflush(out);
+    }
+
+    /* An error occurred */
+    if (pid < 0)
+        exit(EXIT_FAILURE);
+    /* Success: Let the parent terminate */
+    if (pid > 0)
+        return std::string("parent");
+        //exit(EXIT_SUCCESS);
+
+    /* On success: The child process becomes session leader */
+    if (setsid() < 0)
+        exit(EXIT_FAILURE);
+
+    /* Catch, ignore and handle signals */
+    //TODO: Implement a working signal handler */
+    signal(SIGCHLD, SIG_IGN);
+    signal(SIGHUP, SIG_IGN);
+
+    /* Fork off for the second time*/
+    /*
+    pid = fork();
+    if (pid != 0) {
+        int flag = CONTRACT_DAEMON;
+        if (fwrite((void*)&pid, sizeof(int), 1, out) <= 0) {
+            err_printf("contract_daemon: write pid failed\n");
+            return "";
+        }
+        fflush(out);
+        cont_pid[1] = pid;
+    }
+    */
+
+    /* An error occurred */
+    if (pid < 0)
+        exit(EXIT_FAILURE);
+
+    /* Set new file permissions */
+    //umask(0);
+
+    /* Change the working directory to the root directory */
+    /* or another appropriated directory */
+    chdir("/");
+
+    /* Close all open file descriptors */
+    int x;
+    for (x = sysconf(_SC_OPEN_MAX); x>=0; x--)
+        close (x);
+    
+    return std::string(buf);
+}
+
+std::string daemon_client(std::string cmd)
+{
+    if (cmd.length() > 50) {
+        err_printf("CONTRACT_DAEMON_CLIENT: command too longr\n");
+    }
+
+    /* Send command */
+    int flag = CONTRACT_DAEMON_CLIENT;
+    if (fwrite((void*)&flag, sizeof(int), 1, out) <= 0) {
+        err_printf("CONTRACT_DAEMON_CLIENT: write control code error\n");
+        return "";
+    }
+    fflush(out);
+
+    if (fwrite((void*)cmd.c_str(), sizeof(char) * 50, 1, out) <= 0) {
+        err_printf("CONTRACT_DAEMON_CLIENT: send command error\n");
+        return "";
+    }
+    fflush(out);
+
+    char buf[151];
+    int ret = fread((void*)&buf, sizeof(char) * 150, 1, in);
+    if (ret <= 0) {
+        err_printf("CONTRACT_DAEMON_CLIENT: read result error\n");
+        return "";
+    }
+
+    return std::string(buf);
+}
+
+void daemon_log(FILE* f, const char* format, ...)
+{
+    va_list args;
+
+    va_start(args, format);
+    vfprintf(f, format, args);
+    fflush(f);
 }

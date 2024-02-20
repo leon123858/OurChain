@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 static fs::path contracts_dir;
+std::queue<int> cont_daemon_q;
 
 const static fs::path& GetContractsDir()
 {
@@ -180,6 +181,28 @@ static int call_rt(ContractStateCache* cache, const uint256& contract, const std
             std::string txid = curTx.get()->vin[0].prevout.hash.ToString();
             fwrite((void*)txid.c_str(), sizeof(char) * 64, 1, pipe_state_write);
             fflush(pipe_state_write);
+        } else if (flag == CONTRACT_DAEMON) { /* Contract daemon */
+            std::string cont_dir = GetContractsDir().string() + "/" + contract.ToString();
+            int cont_pid;
+            fwrite((void*)cont_dir.c_str(), sizeof(char) * 150, 1, pipe_state_write);
+            fflush(pipe_state_write);
+            //fread((void*)&cont_pid, sizeof(int), 1, pipe_state_read);
+            //cont_daemon_q.push(cont_pid);
+            fread((void*)&cont_pid, sizeof(int), 1, pipe_state_read);
+            cont_daemon_q.push(cont_pid);
+        } else if (flag == CONTRACT_DAEMON_CLIENT) {
+            char buf[51];
+            int ret = fread((void*)&buf, sizeof(char) * 50, 1, pipe_state_read);
+            if (ret <= 0) {
+                LogPrintf("Contract Client send command failed\n");
+                break;
+            }
+            LogPrintf("HERE %s\n", buf);
+            if (std::string(buf) == std::string("getcontractdir")) {
+                std::string cont_dir = GetContractsDir().string() + "/" + contract.ToString();
+                fwrite((void*)cont_dir.c_str(), sizeof(char) * 150, 1, pipe_state_write);
+                fflush(pipe_state_write);
+            }
         } else {
             break;
         }
@@ -265,4 +288,14 @@ bool ProcessContract(const Contract& contract, const CTransactionRef& curTx, Con
     }
 
     return true;
+}
+
+/* Contract daemon */
+void StopContractDaemon()
+{
+    while (!cont_daemon_q.empty()) {
+        int cont_pid = cont_daemon_q.front();
+        kill(cont_pid, SIGTERM);
+        cont_daemon_q.pop();
+    }
 }

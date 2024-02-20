@@ -31,6 +31,7 @@ using json = nlohmann::json;
 
 enum Command
 {
+    get,
     login,
     verify,
     registerNewUser,
@@ -39,7 +40,7 @@ enum Command
     removeCoin,
 };
 
-static std::unordered_map<std::string, Command> const string2Command = {{"login", Command::login}, {"verify", Command::verify}, {"registerNewUser", Command::registerNewUser}, {"getCoins", Command::getCoins}, {"setCoin", Command::setCoin}, {"removeCoin", Command::removeCoin}};
+static std::unordered_map<std::string, Command> const string2Command = {{"get", Command::get}, {"login", Command::login}, {"verify", Command::verify}, {"registerNewUser", Command::registerNewUser}, {"getCoins", Command::getCoins}, {"setCoin", Command::setCoin}, {"removeCoin", Command::removeCoin}};
 
 /**
  * data structure
@@ -107,6 +108,15 @@ extern "C" int contract_main(int argc, char **argv)
     }
     switch (eCommand->second)
     {
+    case Command::get:
+        if (check_runtime_can_write_db())
+        {
+            return 0;
+        }
+        {
+            general_interface_write("aid", "0.0.1");
+            return 0;
+        }
     case Command::login:
         if (check_runtime_can_write_db())
         {

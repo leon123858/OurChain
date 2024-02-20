@@ -6,10 +6,20 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-extern "C" int contract_main(int argc, char **argv) {
+extern "C" int contract_main(int argc, char **argv)
+{
   // pure mode
-  if (!check_runtime_can_write_db()) {
+  if (!check_runtime_can_write_db())
+  {
     std::cerr << "runtime is pure mode" << std::endl;
+    std::string command = argv[1];
+    // general interface
+    if (command == "get")
+    {
+      general_interface_write("sample", "0.0.1");
+      return 0;
+    }
+    // pure operation
     json j = state_read();
     std::cerr << "get state: " << j.dump() << std::endl;
     std::cerr << "pre txid: " << get_pre_txid() << std::endl;
@@ -19,7 +29,8 @@ extern "C" int contract_main(int argc, char **argv) {
     return 0;
   }
   // call contract state
-  if (state_exist()) {
+  if (state_exist())
+  {
     json j = state_read();
     std::cerr << "get state: " << j.dump() << std::endl;
     std::cerr << "pre txid: " << get_pre_txid() << std::endl;
