@@ -1,6 +1,21 @@
 #include "contract/updateStrategy.h"
 #include "contract/processing.h"
+#include <boost/asio.hpp>
+#include <future>
 #include <stack>
+#include <sys/wait.h>
+
+static fs::path contracts_dir;
+
+const static fs::path& GetContractsDir()
+{
+    if (!contracts_dir.empty()) return contracts_dir;
+
+    contracts_dir = GetDataDir() / "contracts";
+    fs::create_directories(contracts_dir);
+
+    return contracts_dir;
+}
 
 static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCache& cache, const Consensus::Params consensusParams)
 {
@@ -11,11 +26,54 @@ static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCa
         if (!ReadBlockFromDisk(*block, tmpBlock, consensusParams)) {
             return false;
         }
+        // init tp
+        boost::asio::thread_pool pool(4);
+        // put task to thread pool
         for (const CTransactionRef& tx : block->vtx) {
-            if (!ProcessContract(tx.get()->contract, tx, &cache)) {
-                LogPrintf("contract process error: %s\n", tx.get()->contract.address.ToString());
+            if (tx.get()->contract.action == contract_action::ACTION_NONE) {
+                continue;
             }
+            if (tx.get()->contract.action == contract_action::ACTION_NEW) {
+                boost::asio::post(pool, [tx, &cache]() {
+                    auto contract = tx.get()->contract;
+                    // contract address
+                    fs::path new_dir = GetContractsDir() / contract.address.GetHex();
+                    fs::create_directories(new_dir);
+                    std::ofstream contract_code(new_dir.string() + "/code.cpp");
+                    contract_code.write(contract.code.c_str(), contract.code.size());
+                    contract_code.close();
+                    // compile contract
+                    int pid, status;
+                    pid = fork();
+                    if (pid == 0) {
+                        int fd = open((GetContractsDir().string() + "/err").c_str(),
+                            O_WRONLY | O_APPEND | O_CREAT,
+                            0664);
+                        dup2(fd, STDERR_FILENO);
+                        close(fd);
+                        execlp("ourcontract-mkdll",
+                            "ourcontract-mkdll",
+                            GetContractsDir().string().c_str(),
+                            contract.address.GetHex().c_str(),
+                            NULL);
+                        exit(EXIT_FAILURE);
+                    }
+                    waitpid(pid, &status, 0);
+                    if (WIFEXITED(status) == false || WEXITSTATUS(status) != 0) {
+                        LogPrintf("compile contract %s error\n", contract.address.GetHex());
+                    }
+                    // execute contract
+                    LogPrintf("execute contract %s\n", contract.address.GetHex());
+                });
+                continue;
+            }
+            assert(tx.get()->contract.action == contract_action::ACTION_CALL);
+            boost::asio::post(pool, [tx, &cache]() {
+                // exe contract
+            });
         }
+        pool.join();
+        // release memory
         delete block;
     }
     return true;
