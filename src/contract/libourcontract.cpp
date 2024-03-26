@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <boost/log/trivial.hpp>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <linux/limits.h>
@@ -11,10 +12,21 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-// #include <boost/uuid/uuid.hpp>
-// #include <boost/uuid/uuid_generators.hpp>
 
 #include "ourcontract.h"
+
+void to_json(json& j, const Env& p)
+{
+    j = json{{"rootContract", p.rootContract}, {"isPure", p.isPure}, {"preTxid", p.preTxid}, {"contractMapStateIndex", p.contractMapStateIndex}, {"contractMapDllPath", p.contractMapDllPath}};
+}
+void from_json(const json& j, Env& p)
+{
+    j.at("rootContract").get_to(p.rootContract);
+    j.at("isPure").get_to(p.isPure);
+    j.at("preTxid").get_to(p.preTxid);
+    j.at("contractMapStateIndex").get_to(p.contractMapStateIndex);
+    j.at("contractMapDllPath").get_to(p.contractMapDllPath);
+}
 
 /* call stack */
 ContractLocalState::ContractLocalState(std::string* stateStr)
@@ -59,161 +71,61 @@ json ContractLocalState::getPreState()
     return this->preState;
 }
 
-thread_local std::stack<ContractLocalState*> call_stack;
-
-/* runtime state pipe*/
-FILE* in;
-FILE* out;
-
-/* argv of ourcontract-rt */
-static int runtime_argc;
-static char** runtime_argv = NULL;
-
-static inline const char* get_contracts_dir()
-{
-    return runtime_argv[1];
-}
-
 std::string* physical_state_read(const char* contractAddress)
 {
-    int flag = BYTE_READ_STATE;
-    fwrite((void*)&flag, sizeof(int), 1, out);
-    fflush(out);
-    fwrite((void*)contractAddress, sizeof(char) * 64, 1, out);
-    fflush(out);
-    int ret = fread((void*)&flag, sizeof(int), 1, in);
-    if (ret <= 0) {
-        err_printf("state_read: read control code error\n");
-        return nullptr;
-    }
-    if (flag == 0) {
-        return nullptr;
-    }
-    char* buf = new char[flag]();
-    size_t buf_size = sizeof(char) * flag;
-    ret = fread((void*)buf, buf_size, 1, in);
-    if (ret <= 0) {
-        err_printf("state_read: read data error\n");
-        return nullptr;
-    }
-    std::string* str = new std::string(buf, buf_size);
-    return str;
+    return nullptr;
 }
 
 int physical_state_write(const std::string* buf)
 {
-    int flag = BYTE_WRITE_STATE;
-    int ret = fwrite((void*)&flag, sizeof(int), 1, out);
-    if (ret <= 0) {
-        err_printf("state_write: write control code error\n");
-        return -1;
-    }
-    fflush(out);
-    int buf_size = buf->size();
-    ret = fwrite((void*)&buf_size, sizeof(int), 1, out);
-    if (ret <= 0) {
-        err_printf("state_write: write size error\n");
-        return -1;
-    }
-    fflush(out);
-    ret = fwrite((void*)buf->data(), buf->size(), 1, out);
-    if (ret <= 0) {
-        err_printf("state_write: write buffer error\n");
-        return -1;
-    }
-    fflush(out);
-    return ret;
+    return 0;
 }
 
 bool check_runtime_can_write_db()
 {
-    if (call_stack.size() > 1) {
-        // only base contract can write state to db
-        return false;
-    }
-    int flag = CHECK_RUNTIME_STATE;
-    fwrite((void*)&flag, sizeof(int), 1, out);
-    fflush(out);
-    int ret = fread((void*)&flag, sizeof(int), 1, in);
-    if (ret <= 0) {
-        err_printf("check_runtime_can_write_db: read mode code error\n");
-        return false;
-    }
-    if (flag == 1) {
-        return true; // only 1 can write state to db
-    } else if (flag == 0) {
-        return false;
-    }
-    err_printf("check_runtime_can_write_db: read mode code error\n");
-    return false;
+    return true;
 }
 
-int start_runtime(int argc, char** argv)
+int start_runtime(json& env, std::vector<std::string>& contractStates, json& result)
 {
-    if (runtime_argv != NULL) {
-        err_printf("start_runtime: cannot be called more than once\n");
+    std::stack<ContractLocalState*>* call_stack;
+    Env e = env.get<Env>();
+    if (call_contract(e.rootContract, contractStates, call_stack, e, result) != 0) {
+        err_printf("start_runtime: call root contract failed\n");
         return EXIT_FAILURE;
     }
-
-    runtime_argc = argc;
-    runtime_argv = argv;
-
-    if (argc < 3) {
-        err_printf("usage: ourcontract-rt [CONTRACTS DIR] [CONTRACT] [ARG 1] [ARG 2] ...\n");
-        return EXIT_FAILURE;
-    }
-
-    in = fdopen(fileno(stdin), "rb");
-    out = fdopen(fileno(stdout), "wb");
-
-    return call_contract(argv[2], argc - 2, argv + 2);
+    return EXIT_SUCCESS;
 }
 
-int call_contract(const char* contract, int argc, char** argv)
+int call_contract(const std::string& contract, std::vector<std::string>& contractStates, std::stack<ContractLocalState*>* call_stack, Env& env, json& result)
 {
-    char filename[PATH_MAX];
-    if (snprintf(filename, PATH_MAX, "%s/%s/code.so", get_contracts_dir(), contract) >= PATH_MAX) {
-        err_printf("call_contract: path too long\n");
+    std::string filePath = env.contractMapDllPath[contract];
+    if (filePath.empty()) {
+        err_printf("call_contract: contract %s not found\n", contract.c_str());
         return EXIT_FAILURE;
     }
-    void* handle = dlopen(filename, RTLD_LAZY);
+    if (filePath.length() > PATH_MAX) {
+        err_printf("call_contract: contract path too long\n");
+        return EXIT_FAILURE;
+    }
+    void* handle = dlopen(filePath.c_str(), RTLD_LAZY);
     if (handle == NULL) {
-        err_printf("call_contract: dlopen failed %s\n", filename);
+        err_printf("call_contract: dlopen failed %s\n", dlerror());
         return EXIT_FAILURE;
     }
-    int (*contract_main)(int, char**) = reinterpret_cast<int (*)(int, char**)>(dlsym(handle, "contract_main"));
+    int (*contract_main)(Env, json*) = reinterpret_cast<int (*)(Env, json*)>(dlsym(handle, "contract_main"));
     if (contract_main == NULL) {
         err_printf("call_contract: %s\n", dlerror());
         return EXIT_FAILURE;
     }
-
-    call_stack.push(new ContractLocalState(physical_state_read(contract)));
-    int ret = contract_main(argc, argv);
-    if (call_stack.size() == 1) {
-        // base contract can write state to DB or pure output
-        std::string* buf = new std::string(call_stack.top()->getState().dump());
-        // clear state
-        delete call_stack.top();
-        call_stack.pop();
-        // write state to DB or pure output
-        auto ret = physical_state_write(buf);
-        if (ret < 0) {
-            err_printf("call_contract physical_state_write error: %s\n", dlerror());
-            return EXIT_FAILURE;
-        }
-        delete buf;
-    } else {
-        // nested contract can only write state to parent contract
-        std::string* buf = new std::string(call_stack.top()->getState().dump());
-        // clear state
-        delete call_stack.top();
-        call_stack.pop();
-        // write state to parent contract
-        call_stack.top()->setPreState(json::parse(*buf));
-        delete buf;
+    auto curState = &contractStates[env.contractMapStateIndex[contract]];
+    auto curStateJson = json::parse(*curState);
+    int ret = contract_main(env, &curStateJson);
+    if (ret != 0) {
+        err_printf("call_contract: contract_main failed\n");
+        return ret;
     }
-
-
+    result = curStateJson;
     dlclose(handle);
     return ret;
 }
@@ -232,22 +144,21 @@ int err_printf(const char* format, ...)
 
 json state_read()
 {
-    return call_stack.top()->getState();
+    return json::value_t::object;
 }
 
 void state_write(json buf)
 {
-    call_stack.top()->setState(buf);
 }
 
 bool state_exist()
 {
-    return !call_stack.top()->isStateNull();
+    return false;
 }
 
 json pre_state_read()
 {
-    return call_stack.top()->getPreState();
+    return json::value_t::object;
 }
 
 void general_interface_write(std::string protocol, std::string version)
@@ -255,23 +166,9 @@ void general_interface_write(std::string protocol, std::string version)
     json j;
     j["protocol"] = protocol;
     j["version"] = version;
-    state_write(j);
 }
 
 std::string get_pre_txid()
 {
-    int flag = GET_PRE_TXID_STATE;
-    fwrite((void*)&flag, sizeof(int), 1, out);
-    fflush(out);
-    char buf[65];
-    int ret = fread((void*)&buf, sizeof(char) * 64, 1, in);
-    if (ret <= 0) {
-        err_printf("check_pre_txid: read error\n");
-        return "";
-    }
-    if (buf[0] == 0) {
-        err_printf("check_pre_txid: pre txid not exist in pure runtime\n");
-        return "";
-    }
-    return std::string(buf, 64);
+    return "";
 }

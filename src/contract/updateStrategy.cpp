@@ -1,4 +1,5 @@
 #include "contract/updateStrategy.h"
+#include "contract/ourcontract.h"
 #include "contract/processing.h"
 #include <boost/asio.hpp>
 #include <future>
@@ -63,13 +64,51 @@ static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCa
                         LogPrintf("compile contract %s error\n", contract.address.GetHex());
                     }
                     // execute contract
+                    int fd_error = open((GetContractsDir().string() + "/err").c_str(),
+                        O_WRONLY | O_APPEND | O_CREAT,
+                        0664);
+                    dup2(fd_error, STDERR_FILENO);
+                    close(fd_error);
                     LogPrintf("execute contract %s\n", contract.address.GetHex());
+                    Env env;
+                    env.rootContract = contract.address.GetHex();
+                    env.isPure = false;
+                    env.preTxid = tx.get()->GetHash().GetHex();
+                    env.contractMapStateIndex[contract.address.GetHex()] = 0;
+                    env.contractMapDllPath[contract.address.GetHex()] = GetContractsDir().string() + "/" + contract.address.GetHex() + "/code.so";
+                    json jsonEnv = env;
+                    std::vector<std::string> contractStates;
+                    contractStates.push_back("{}");
+                    json result;
+                    if (start_runtime(jsonEnv, contractStates, result) != 0) {
+                        LogPrintf("execute contract %s error\n", contract.address.GetHex());
+                    }
                 });
                 continue;
             }
             assert(tx.get()->contract.action == contract_action::ACTION_CALL);
             boost::asio::post(pool, [tx, &cache]() {
+                auto contract = tx.get()->contract;
                 // exe contract
+                int fd_error = open((GetContractsDir().string() + "/err").c_str(),
+                    O_WRONLY | O_APPEND | O_CREAT,
+                    0664);
+                dup2(fd_error, STDERR_FILENO);
+                close(fd_error);
+                LogPrintf("execute contract %s\n", contract.address.GetHex());
+                Env env;
+                env.rootContract = contract.address.GetHex();
+                env.isPure = false;
+                env.preTxid = tx.get()->GetHash().GetHex();
+                env.contractMapStateIndex[contract.address.GetHex()] = 0;
+                env.contractMapDllPath[contract.address.GetHex()] = GetContractsDir().string() + "/" + contract.address.GetHex() + "/code.so";
+                json jsonEnv = env;
+                std::vector<std::string> contractStates;
+                contractStates.push_back("{}");
+                json result;
+                if (start_runtime(jsonEnv, contractStates, result) != 0) {
+                    LogPrintf("execute contract %s error\n", contract.address.GetHex());
+                }
             });
         }
         pool.join();

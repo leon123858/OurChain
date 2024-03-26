@@ -14,17 +14,48 @@
 #define GET_PRE_TXID_STATE 3
 
 #include <json.hpp>
+#include <map>
+#include <stack>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string>
+#include <vector>
 
 using json = nlohmann::json;
 
+struct Env {
+    std::string rootContract;
+    bool isPure;
+    std::string preTxid;
+    std::map<std::string, int> contractMapStateIndex;
+    std::map<std::string, std::string> contractMapDllPath;
+};
+
+class ContractLocalState
+{
+private:
+    std::string* stateStr;
+    json state;
+    json preState;
+
+public:
+    ContractLocalState(std::string* stateStr);
+    ~ContractLocalState();
+    void setState(json state);
+    void setPreState(json preState);
+    json getPreState();
+    json getState();
+    bool isStateNull();
+};
+
+void to_json(json& j, const Env& p);
+void from_json(const json& j, Env& p);
+
 /* non-reentrant entry point of runtime */
-int start_runtime(int argc, char** argv);
+int start_runtime(json& env, std::vector<std::string>& contractStates, json& result);
 
 /* contract call can be nested */
-int call_contract(const char* contract, int argc, char** argv);
+int call_contract(const std::string& contract, std::vector<std::string>& contractStates, std::stack<ContractLocalState*>* call_stack, Env& env, json& result);
 
 /* print to runtime error log */
 int err_printf(const char* format, ...);
@@ -48,23 +79,6 @@ json pre_state_read();
 std::string get_pre_txid();
 
 /* shortcut for return general interface */
-void general_interface_write(std::string protocol, std::string version);
-
-class ContractLocalState
-{
-private:
-    std::string* stateStr;
-    json state;
-    json preState;
-
-public:
-    ContractLocalState(std::string* stateStr);
-    ~ContractLocalState();
-    void setState(json state);
-    void setPreState(json preState);
-    json getPreState();
-    json getState();
-    bool isStateNull();
-};
+void general_interface_write(std::string protocol, std::string version, std::vector<std::string> dep = {});
 
 #endif // BITCOIN_CONTRACT_OURCONTRACT_H

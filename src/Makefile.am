@@ -81,7 +81,7 @@ dist_bin_SCRIPTS =
 include_HEADERS =
 
 dist_bin_SCRIPTS += contract/ourcontract-mkdll
-bin_PROGRAMS += ourcontract-rt
+# bin_PROGRAMS += ourcontract-rt
 
 .PHONY: FORCE check-symbols check-security
 # bitcoin core #
@@ -111,6 +111,7 @@ BITCOIN_CORE_H = \
   contract/dbWrapper.h \
   contract/observer.h \
   contract/updateStrategy.h \
+  contract/ourcontract.h \
   core_io.h \
   core_memusage.h \
   cuckoocache.h \
@@ -210,6 +211,7 @@ libbitcoin_server_a_SOURCES = \
   contract/dbWrapper.cpp \
   contract/observer.cpp \
   contract/updateStrategy.cpp \
+  contract/libourcontract.cpp \
   httprpc.cpp \
   httpserver.cpp \
   init.cpp \
@@ -482,17 +484,17 @@ bitcoin_tx_LDADD += $(BOOST_LIBS) $(CRYPTO_LIBS) $(GMP_LIBS)
 #
 
 # ourcontract-rt binary #
-ourcontract_rt_SOURCES = \
-  contract/ourcontract-rt.cpp \
-  contract/ourcontract.h
-ourcontract_rt_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/$(subdir)/contract -I$(top_srcdir)/$(subdir)/json
-ourcontract_rt_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-ourcontract_rt_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
-
-ourcontract_rt_LDADD = \
-  $(LIBOURCONTRACT)
-
-ourcontract_rt_LDADD += -ldl
+# ourcontract_rt_SOURCES = \
+#   contract/ourcontract-rt.cpp \
+#   contract/ourcontract.h
+# ourcontract_rt_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/$(subdir)/contract -I$(top_srcdir)/$(subdir)/json
+# ourcontract_rt_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+# ourcontract_rt_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+# 
+# ourcontract_rt_LDADD = \
+#   $(LIBOURCONTRACT)
+# 
+# ourcontract_rt_LDADD += -ldl
 #
 
 # bitcoinconsensus library #
