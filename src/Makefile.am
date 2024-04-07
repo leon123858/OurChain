@@ -112,6 +112,7 @@ BITCOIN_CORE_H = \
   contract/observer.h \
   contract/updateStrategy.h \
   contract/ourcontract.h \
+  contract/contractServer.h \
   core_io.h \
   core_memusage.h \
   cuckoocache.h \
@@ -212,6 +213,7 @@ libbitcoin_server_a_SOURCES = \
   contract/observer.cpp \
   contract/updateStrategy.cpp \
   contract/libourcontract.cpp \
+  contract/contractServer.cpp \
   httprpc.cpp \
   httpserver.cpp \
   init.cpp \

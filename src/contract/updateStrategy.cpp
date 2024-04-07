@@ -5,6 +5,7 @@
 #include <future>
 #include <stack>
 #include <sys/wait.h>
+#include <zmq.hpp>
 
 static fs::path contracts_dir;
 
@@ -16,6 +17,27 @@ const static fs::path& GetContractsDir()
     fs::create_directories(contracts_dir);
 
     return contracts_dir;
+}
+
+static void zmqPushMessage(const std::string& message)
+{
+    zmq::context_t context(1);
+    zmq::socket_t pusher(context, zmq::socket_type::req);
+    pusher.connect("tcp://127.0.0.1:5559");
+    // send message
+    zmq::message_t zmq_message(message.size());
+    memcpy(zmq_message.data(), message.data(), message.size());
+    if (!pusher.send(zmq_message, zmq::send_flags::none)) {
+        LogPrintf("send message error\n");
+    }
+    // receive response
+    zmq::message_t response;
+    if (!pusher.recv(response, zmq::recv_flags::none)) {
+        LogPrintf("receive response error\n");
+    }
+    std::string recv_msg(static_cast<char*>(response.data()), response.size());
+    LogPrintf("Contract Received response: %s\n", recv_msg.c_str());
+    pusher.close();
 }
 
 static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCache& cache, const Consensus::Params consensusParams)
@@ -64,25 +86,7 @@ static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCa
                         LogPrintf("compile contract %s error\n", contract.address.GetHex());
                     }
                     // execute contract
-                    int fd_error = open((GetContractsDir().string() + "/err").c_str(),
-                        O_WRONLY | O_APPEND | O_CREAT,
-                        0664);
-                    dup2(fd_error, STDERR_FILENO);
-                    close(fd_error);
-                    LogPrintf("execute contract %s\n", contract.address.GetHex());
-                    Env env;
-                    env.rootContract = contract.address.GetHex();
-                    env.isPure = false;
-                    env.preTxid = tx.get()->GetHash().GetHex();
-                    env.contractMapStateIndex[contract.address.GetHex()] = 0;
-                    env.contractMapDllPath[contract.address.GetHex()] = GetContractsDir().string() + "/" + contract.address.GetHex() + "/code.so";
-                    json jsonEnv = env;
-                    std::vector<std::string> contractStates;
-                    contractStates.push_back("{}");
-                    json result;
-                    if (start_runtime(jsonEnv, contractStates, result) != 0) {
-                        LogPrintf("execute contract %s error\n", contract.address.GetHex());
-                    }
+                    zmqPushMessage("execute contract " + contract.address.GetHex());
                 });
                 continue;
             }
@@ -90,25 +94,7 @@ static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCa
             boost::asio::post(pool, [tx, &cache]() {
                 auto contract = tx.get()->contract;
                 // exe contract
-                int fd_error = open((GetContractsDir().string() + "/err").c_str(),
-                    O_WRONLY | O_APPEND | O_CREAT,
-                    0664);
-                dup2(fd_error, STDERR_FILENO);
-                close(fd_error);
-                LogPrintf("execute contract %s\n", contract.address.GetHex());
-                Env env;
-                env.rootContract = contract.address.GetHex();
-                env.isPure = false;
-                env.preTxid = tx.get()->GetHash().GetHex();
-                env.contractMapStateIndex[contract.address.GetHex()] = 0;
-                env.contractMapDllPath[contract.address.GetHex()] = GetContractsDir().string() + "/" + contract.address.GetHex() + "/code.so";
-                json jsonEnv = env;
-                std::vector<std::string> contractStates;
-                contractStates.push_back("{}");
-                json result;
-                if (start_runtime(jsonEnv, contractStates, result) != 0) {
-                    LogPrintf("execute contract %s error\n", contract.address.GetHex());
-                }
+                zmqPushMessage("execute contract " + contract.address.GetHex());
             });
         }
         pool.join();
