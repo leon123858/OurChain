@@ -18,9 +18,6 @@ public:
     void clear();
     // duplicate sanpshot to checkPoint folder
     void saveCheckPoint(std::string tipBlockHash);
-    // duplicate sanpshot to tmp folder
-    void saveTmpState();
-    bool isCheckPointExist(std::string tipBlockHash);
     ContractDBWrapper* getDBWrapper();
 
 private:
@@ -93,12 +90,12 @@ public:
     void popBlock();
     // 保存合約狀態快照(checkPoint)
     void saveCheckPoint();
-    // 保存合約狀態快照(tmp)
-    void saveTmpState();
     // 恢復合約狀態快照到目標 checkPoint
-    bool restoreCheckPoint();
+    bool restoreCheckPoint(std::string tipBlockHash, std::vector<CheckPointInfo> checkPointList);
     // clear old checkPoint in checkPoint folder(保留幾個 block 內的 check point)
     void clearCheckPoint(int maxCheckPointCount);
+    // get checkPoint list
+    std::vector<CheckPointInfo> getCheckPointList();
 
 private:
     BlockCache* blockCache;

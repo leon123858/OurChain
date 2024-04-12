@@ -61,7 +61,7 @@ case $host in
   ;;
 esac
 dnl Require C++11 compiler (no GNU extensions)
-AX_CXX_COMPILE_STDCXX([11], [noext], [mandatory], [nodefault])
+AX_CXX_COMPILE_STDCXX([17], [noext], [mandatory], [nodefault])
 dnl Check if -latomic is required for <std::atomic>
 CHECK_ATOMIC
 
@@ -83,6 +83,16 @@ AC_PATH_TOOL(RANLIB, ranlib)
 AC_PATH_TOOL(STRIP, strip)
 AC_PATH_TOOL(GCOV, gcov)
 AC_PATH_PROG(LCOV, lcov)
+dnl For ZoKrates
+#AC_CHECK_PROG(CARGO, [cargo], [yes], [no])
+#if test x$CARGO = xno; then
+#    AC_MSG_ERROR([cargo is required])
+#fi
+#
+#AC_CHECK_PROG(RUSTC, [rustc], [yes], [no])
+#if test x$RUSTC = xno; then
+#    AC_MSG_ERROR([rustc is required])
+#fi
 dnl Python 3.x is supported from 3.4 on (see https://github.com/bitcoin/bitcoin/issues/7893)
 AC_PATH_PROGS([PYTHON], [python3.6 python3.5 python3.4 python3 python2.7 python2 python])
 AC_PATH_PROG(GENHTML, genhtml)
@@ -1222,6 +1232,12 @@ AC_SUBST(BITCOIN_GUI_NAME)
 AC_SUBST(BITCOIN_CLI_NAME)
 AC_SUBST(BITCOIN_TX_NAME)
 
+# Contract
+ROCKSDB_CPPFLAGS="$CPPFLAGS -I/usr/local/include"
+ROCKSDB_LDFLAGS="$LDFLAGS -L/usr/local/lib -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd"
+AC_SUBST(ROCKSDB_CPPFLAGS)
+AC_SUBST(ROCKSDB_LDFLAGS)
+
 AC_SUBST(RELDFLAGS)
 AC_SUBST(ERROR_CXXFLAGS)
 AC_SUBST(HARDENED_CXXFLAGS)
@@ -1329,4 +1345,4 @@ echo "  CXX           = $CXX"
 echo "  CXXFLAGS      = $CXXFLAGS"
 echo "  LDFLAGS       = $LDFLAGS"
 echo "  ARFLAGS       = $ARFLAGS"
-echo 
+echo

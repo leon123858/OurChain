@@ -98,24 +98,52 @@ bool UpdateStrategyContinue::UpdateSnapShot(ContractStateCache& cache, SnapShot&
 
 bool UpdateStrategyRollback::UpdateSnapShot(ContractStateCache& cache, SnapShot& snapShot, CChain& chainActive, const Consensus::Params consensusParams)
 {
+    BlockCache::blockIndex firstBlock;
+    if (!cache.getFirstBlockCache(firstBlock)) {
+        return false;
+    }
+    auto checkPointInfoList = cache.getCheckPointList();
+    std::vector<std::string> checkPointList;
+    for (auto it = checkPointInfoList.begin(); it != checkPointInfoList.end(); it++) {
+        checkPointList.push_back(it->tipBlockHash);
+    }
     for (CBlockIndex* pindex = chainActive.Tip(); pindex != nullptr; pindex = pindex->pprev) {
-        // push block index to cache
         int height = pindex->nHeight;
         uint256 hash = pindex->GetBlockHash();
-        if (cache.getSnapShot()->isCheckPointExist(hash.ToString())) {
-            // find closest check point
-            auto newDB = ContractDBWrapper(hash.ToString(), true);
-            newDB.transferAllState(*cache.getSnapShot()->getDBWrapper());
-            // check heigh same
-            auto newBlockIndex = cache.getBlockCache()->getHeighestBlock();
-            if (newBlockIndex.blockHash != hash || newBlockIndex.blockHeight != height) {
-                LogPrintf("rollback error can not continue in checkPoint \n");
-                continue;
+        // try to match reacent same block
+        if (height > firstBlock.blockHeight) {
+            continue;
+        } else if (height == firstBlock.blockHeight) {
+            if (hash == firstBlock.blockHash) {
+                // check point exist
+                if (std::find(checkPointList.begin(), checkPointList.end(), hash.ToString()) != checkPointList.end()) {
+                    // restore check point
+                    if (!cache.restoreCheckPoint(hash.ToString(), checkPointInfoList)) {
+                        LogPrintf("rollback error can not continue in checkPoint \n");
+                        assert(false);
+                    }
+                    UpdateStrategyContinue algo;
+                    return algo.UpdateSnapShot(cache, snapShot, chainActive, consensusParams);
+                }
             }
-            UpdateStrategyContinue algo;
-            return algo.UpdateSnapShot(cache, snapShot, chainActive, consensusParams);
+            cache.popBlock();
+            if (!cache.getFirstBlockCache(firstBlock)) {
+                // block is empty now
+                UpdateStrategyRebuild algo;
+                return algo.UpdateSnapShot(cache, snapShot, chainActive, consensusParams);
+            }
+            continue;
+        } else {
+            // cache index should not bigger than chain index
+            while (firstBlock.blockHeight >= height) {
+                cache.popBlock();
+                if (!cache.getFirstBlockCache(firstBlock)) {
+                    // block is empty now
+                    UpdateStrategyRebuild algo;
+                    return algo.UpdateSnapShot(cache, snapShot, chainActive, consensusParams);
+                }
+            }
         }
-        cache.popBlock();
     }
     UpdateStrategyRebuild algo;
     return algo.UpdateSnapShot(cache, snapShot, chainActive, consensusParams);

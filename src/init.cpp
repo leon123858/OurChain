@@ -16,6 +16,7 @@
 #include "checkpoints.h"
 #include "compat/sanity.h"
 #include "consensus/validation.h"
+#include "contract/processing.h" // Contract daemon
 #include "fs.h"
 #include "httpserver.h"
 #include "httprpc.h"
@@ -191,6 +192,8 @@ void Shutdown()
     StopREST();
     StopRPC();
     StopHTTPServer();
+    /* Contract daemon */
+    StopContractDaemon();
 #ifdef ENABLE_WALLET
     for (CWalletRef pwallet : vpwallets) {
         pwallet->Flush(false);

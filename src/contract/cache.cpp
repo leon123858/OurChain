@@ -29,14 +29,6 @@ void SnapShot::saveCheckPoint(std::string tipBlockHash)
 {
     dbWrapper->saveCheckPoint(tipBlockHash);
 }
-void SnapShot::saveTmpState()
-{
-    dbWrapper->saveTmpState();
-}
-bool SnapShot::isCheckPointExist(std::string tipBlockHash)
-{
-    return dbWrapper->findCheckPoint(tipBlockHash);
-}
 ContractDBWrapper* SnapShot::getDBWrapper()
 {
     return dbWrapper;
@@ -69,7 +61,7 @@ uint256 BlockCache::getBlockHash(int blockHeight)
 }
 BlockCache::blockIndex BlockCache::getHeighestBlock()
 {
-    leveldb::Iterator* it = dbWrapper->getIterator();
+    rocksdb::Iterator* it = dbWrapper->getIterator();
     // 定位到数据库的最后一个条目
     it->SeekToLast();
     if (it->Valid() == false) {
@@ -126,58 +118,27 @@ void ContractStateCache::popBlock()
 void ContractStateCache::saveCheckPoint()
 {
     auto blockIndex = blockCache->getHeighestBlock();
-    if (snapShot->isCheckPointExist(blockIndex.blockHash.ToString()))
-        return;
     snapShot->saveCheckPoint(blockIndex.blockHash.ToString());
 }
-void ContractStateCache::saveTmpState()
+bool ContractStateCache::restoreCheckPoint(std::string tipBlockHash, std::vector<CheckPointInfo> checkPointList)
 {
-    snapShot->saveTmpState();
-}
-bool ContractStateCache::restoreCheckPoint()
-{
-    auto blockIndex = blockCache->getHeighestBlock();
-    if (snapShot->isCheckPointExist(blockIndex.blockHash.ToString())) {
-        auto checkSnapShot = ContractDBWrapper(std::string("checkPoint/") + blockIndex.blockHash.ToString());
-        return true;
+    // get target beckup id by tipBlockHash
+    int targetBackupId = -1;
+    for (auto it = checkPointList.begin(); it != checkPointList.end(); it++) {
+        if (it->tipBlockHash == tipBlockHash) {
+            targetBackupId = it->id;
+            break;
+        }
     }
-    return false;
+    assert(targetBackupId > 0);
+    return this->snapShot->getDBWrapper()->restoreCheckPoint(targetBackupId);
 }
 void ContractStateCache::clearCheckPoint(int maxBlockCheckPointCount)
 {
-    // record recent block hash
-    std::vector<std::string> recentBlockHash;
-    // get recent block hash
-    {
-        auto curHeight = blockCache->getHeighestBlock().blockHeight;
-        for (int i = 0; i < maxBlockCheckPointCount; i++) {
-            auto blockHash = blockCache->getBlockHash(curHeight);
-            if (blockHash.IsNull())
-                break;
-            recentBlockHash.push_back(blockHash.ToString());
-            curHeight--;
-        }
-    }
-    // get check point folder path
-    fs::path checkPointPath = snapShot->getDBWrapper()->CheckPointPath;
-    // iterate all checkPoint in folder
-    for (auto& p : fs::directory_iterator(checkPointPath)) {
-        if (!fs::is_directory(p))
-            continue;
-        // get checkPoint file path
-        fs::path checkPointFilePath = p.path();
-        // get checkPoint file name
-        std::string checkPointFileName = checkPointFilePath.filename().string();
-        // check if checkPoint file name is in recent block hash
-        auto isShouldRemove = true;
-        for (auto& blockHash : recentBlockHash) {
-            if (blockHash == checkPointFileName) {
-                isShouldRemove = false;
-                break;
-            }
-        }
-        if (isShouldRemove) {
-            fs::remove_all(checkPointFilePath);
-        }
-    }
+    this->snapShot->getDBWrapper()->removeOldCheckPoint(maxBlockCheckPointCount);
+}
+
+std::vector<CheckPointInfo> ContractStateCache::getCheckPointList()
+{
+    return snapShot->getDBWrapper()->findCheckPointList();
 }

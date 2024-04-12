@@ -3,67 +3,73 @@
 
 #include "util.h"
 #include <boost/thread/shared_mutex.hpp>
-#include <leveldb/db.h>
+#include <rocksdb/db.h>
 #include <string>
 #include <vector>
 
 #include <boost/thread/shared_mutex.hpp>
+#include <shared_mutex>
+typedef std::unique_lock<std::shared_mutex> WriteLock;
+typedef std::shared_lock<std::shared_mutex> ReadLock;
 
-extern boost::mutex tmp_contract_state_access;
+extern std::shared_mutex tmp_contract_db_mutex;
+
+struct CheckPointInfo {
+    std::string tipBlockHash;
+    int id;
+};
 
 class ContractDBWrapper
 {
 private:
-    leveldb::DB* db;
-    leveldb::Status mystatus;
-    leveldb::WriteOptions writeOptions;
+    rocksdb::DB* db;
+    rocksdb::Status mystatus;
+    rocksdb::WriteOptions writeOptions;
 
     fs::path getContractDBPath(std::string name)
     {
         return GetDataDir() / "contracts" / name;
     }
-    fs::path getContractCheckPointPath(std::string name)
-    {
-        return CheckPointPath / name;
-    }
     // 保存當前狀態快照到目標位置
-    void saveDuplicateState(fs::path path);
+    void saveDuplicateState(fs::path path, std::string metadata);
 
 public:
+    std::string curPath;
     const fs::path CheckPointPath = GetDataDir() / "contracts" / "checkPoint";
+
     // pre db operation status
-    leveldb::Status getStatus();
+    rocksdb::Status getStatus();
     // is pre db operation ok
     bool isOk();
     // set critical save (directly write to disk)
     void setCriticalSave();
     // get iterator, for custom operation on database
-    leveldb::Iterator* getIterator();
+    rocksdb::Iterator* getIterator();
     // connect contract DB
     ContractDBWrapper(std::string name);
-    // connrct to check point db
-    ContractDBWrapper(std::string checkPointBlockHash, bool isCheckPoint);
+    // connect read only contract DB (mode should be "readOnly")
+    ContractDBWrapper(std::string name, std::string mode);
     // disconnect contract DB
     ~ContractDBWrapper();
 
-    // transfer all state
-    void transferAllState(ContractDBWrapper& target);
     // get state
     std::string getState(std::string key);
     // set state
     void setState(std::string key, std::string value);
     // delete state
     void deleteState(std::string key);
-    // get all states
-    std::map<std::string, std::string> getAllStates();
     // clear all states
     void clearAllStates();
     // save contract checkPoint
     void saveCheckPoint(std::string tipBlockHash);
     // save tmp state to fix file place, read only user will read it
     void saveTmpState();
-    // find check point
-    bool findCheckPoint(std::string tipBlockHash);
+    // restore check point
+    bool restoreCheckPoint(int targetBackupId);
+    // remove old check point
+    void removeOldCheckPoint(int maxCheckPointCount);
+    // find check point list
+    std::vector<CheckPointInfo> findCheckPointList();
 };
 
 

@@ -35,6 +35,7 @@ using json = nlohmann::json;
 
 enum Command
 {
+  get,
   totalSupply,
   balanceOf,
   transfer,
@@ -43,7 +44,7 @@ enum Command
   transferFrom
 };
 
-static std::unordered_map<std::string, Command> const string2Command = {{"totalSupply", Command::totalSupply}, {"balanceOf", Command::balanceOf}, {"transfer", Command::transfer}, {"allowance", Command::allowance}, {"approve", Command::approve}, {"transferFrom", Command::transferFrom}};
+static std::unordered_map<std::string, Command> const string2Command = {{"get", Command::get}, {"totalSupply", Command::totalSupply}, {"balanceOf", Command::balanceOf}, {"transfer", Command::transfer}, {"allowance", Command::allowance}, {"approve", Command::approve}, {"transferFrom", Command::transferFrom}};
 static std::string aidContractAddress = "";
 
 /**
@@ -172,6 +173,15 @@ extern "C" int contract_main(int argc, char **argv)
   }
   switch (eCommand->second)
   {
+  case Command::get:
+    if (check_runtime_can_write_db())
+    {
+      return 0;
+    }
+    {
+      general_interface_write("orc20", "0.0.1");
+      return 0;
+    }
   case Command::totalSupply:
     if (check_runtime_can_write_db())
     {

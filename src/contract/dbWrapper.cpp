@@ -1,25 +1,32 @@
 #include "contract/dbWrapper.h"
+#include "rocksdb/utilities/backup_engine.h"
 
-boost::mutex tmp_contract_state_access;
+std::shared_mutex tmp_contract_db_mutex;
 
 ContractDBWrapper::ContractDBWrapper(std::string name)
 {
-    leveldb::Options options;
+    rocksdb::Options options;
     options.create_if_missing = true;
     fs::path path = getContractDBPath(name);
     TryCreateDirectories(path);
-    mystatus = leveldb::DB::Open(options, path.string(), &db);
+    mystatus = rocksdb::DB::Open(options, path.string(), &db);
     assert(mystatus.ok());
+    this->curPath = path.string();
 }
 
-ContractDBWrapper::ContractDBWrapper(std::string checkPointBlockHash, bool isCheckPoint)
+ContractDBWrapper::ContractDBWrapper(std::string name, std::string mode)
 {
-    assert(isCheckPoint);
-    leveldb::Options options;
-    options.create_if_missing = false;
-    fs::path path = getContractCheckPointPath(checkPointBlockHash);
-    mystatus = leveldb::DB::Open(options, path.string(), &db);
+    assert(mode == "readOnly");
+    fs::path path;
+    rocksdb::Options options;
+    if (mode == "readOnly") {
+        options.IncreaseParallelism();
+        options.OptimizeLevelStyleCompaction();
+        path = getContractDBPath(name);
+        mystatus = rocksdb::DB::OpenForReadOnly(options, path.string(), &db);
+    }
     assert(mystatus.ok());
+    this->curPath = path.string();
 }
 
 ContractDBWrapper::~ContractDBWrapper()
@@ -28,7 +35,7 @@ ContractDBWrapper::~ContractDBWrapper()
     db = nullptr;
 }
 
-leveldb::Status ContractDBWrapper::getStatus()
+rocksdb::Status ContractDBWrapper::getStatus()
 {
     return mystatus;
 }
@@ -41,101 +48,116 @@ void ContractDBWrapper::setCriticalSave()
 {
     writeOptions.sync = true;
 }
-leveldb::Iterator* ContractDBWrapper::getIterator()
+rocksdb::Iterator* ContractDBWrapper::getIterator()
 {
-    return db->NewIterator(leveldb::ReadOptions());
-}
-
-void ContractDBWrapper::transferAllState(ContractDBWrapper& target)
-{
-    target.clearAllStates();
-    leveldb::Iterator* it = db->NewIterator(leveldb::ReadOptions());
-    for (it->SeekToFirst(); it->Valid(); it->Next()) {
-        target.setState(it->key().ToString(), it->value().ToString());
-    }
-    delete it;
+    return db->NewIterator(rocksdb::ReadOptions());
 }
 
 std::string ContractDBWrapper::getState(std::string key)
 {
     std::string value;
-    mystatus = db->Get(leveldb::ReadOptions(), key, &value);
+    mystatus = db->Get(rocksdb::ReadOptions(), key, &value);
     return value;
 }
 
 void ContractDBWrapper::setState(std::string key, std::string value)
 {
-    mystatus = db->Put(leveldb::WriteOptions(), key, value);
+    mystatus = db->Put(rocksdb::WriteOptions(), key, value);
 }
 
 void ContractDBWrapper::deleteState(std::string key)
 {
-    mystatus = db->Delete(leveldb::WriteOptions(), key);
-}
-
-std::map<std::string, std::string> ContractDBWrapper::getAllStates()
-{
-    std::map<std::string, std::string> states;
-    leveldb::Iterator* it = db->NewIterator(leveldb::ReadOptions());
-    for (it->SeekToFirst(); it->Valid(); it->Next()) {
-        states[it->key().ToString()] = it->value().ToString();
-    }
-    assert(it->status().ok());
-    delete it;
-    return states;
+    mystatus = db->Delete(rocksdb::WriteOptions(), key);
 }
 
 void ContractDBWrapper::clearAllStates()
 {
-    std::map<std::string, std::string> states = getAllStates();
-    for (auto it = states.begin(); it != states.end(); it++) {
-        deleteState(it->first);
-        assert(isOk());
-    }
+    // use delete range to clear all states
+    mystatus = db->DeleteRange(rocksdb::WriteOptions(), rocksdb::Slice(), rocksdb::Slice());
+    assert(mystatus.ok());
 }
 
-void ContractDBWrapper::saveDuplicateState(fs::path path)
+void ContractDBWrapper::saveDuplicateState(fs::path path, std::string metadata)
 {
-    leveldb::DB* newdb;
-    leveldb::Options options;
-    options.create_if_missing = true;
-    boost::mutex::scoped_lock lock(tmp_contract_state_access);
-    leveldb::Status status = leveldb::DB::Open(options, path.string(), &newdb);
-    assert(status.ok());
-    leveldb::WriteOptions writeOptions;
-    writeOptions.sync = true;
-    leveldb::Iterator* it = db->NewIterator(leveldb::ReadOptions());
-    for (it->SeekToFirst(); it->Valid(); it->Next()) {
-        status = newdb->Put(writeOptions, it->key(), it->value());
-        if (!status.ok()) {
-            LogPrintf("saveCheckPoint: %s, should rebuild\n", status.ToString());
-            remove_all(path);
-            assert(false);
-        }
-    }
-    delete it;
-    delete newdb;
+    rocksdb::BackupEngine* backup_engine;
+    rocksdb::BackupEngineOptions backup_engine_options(path.string());
+    mystatus = rocksdb::BackupEngine::Open(rocksdb::Env::Default(), backup_engine_options, &backup_engine);
+    assert(mystatus.ok());
+    backup_engine->CreateNewBackupWithMetadata(db, metadata);
+    delete backup_engine;
 }
 
 // save contract checkPoint
 void ContractDBWrapper::saveCheckPoint(std::string tipBlockHash)
 {
-    fs::path path = getContractCheckPointPath(tipBlockHash);
-    TryCreateDirectories(path);
-    saveDuplicateState(path);
+    TryCreateDirectories(CheckPointPath);
+    saveDuplicateState(CheckPointPath, tipBlockHash);
 }
 
 void ContractDBWrapper::saveTmpState()
 {
     fs::path path = getContractDBPath("tmp");
     TryCreateDirectories(path);
-    // overwrite all states
-    saveDuplicateState(path);
+    WriteLock lock(tmp_contract_db_mutex);
+    // restore from cur checkPoint
+    rocksdb::BackupEngine* backup_engine;
+    rocksdb::BackupEngineOptions backup_engine_options(CheckPointPath.string());
+    mystatus = rocksdb::BackupEngine::Open(rocksdb::Env::Default(), backup_engine_options, &backup_engine);
+    assert(mystatus.ok());
+    backup_engine->RestoreDBFromLatestBackup(path.string(), path.string());
+    lock.unlock();
+    delete backup_engine;
 }
 
-// find check point
-bool ContractDBWrapper::findCheckPoint(std::string tipBlockHash)
+// find check point list
+std::vector<CheckPointInfo> ContractDBWrapper::findCheckPointList()
 {
-    fs::path path = getContractCheckPointPath(tipBlockHash);
-    return exists(path);
+    std::vector<CheckPointInfo> checkPointList;
+    rocksdb::BackupEngine* backup_engine;
+    rocksdb::BackupEngineOptions backup_engine_options(CheckPointPath.string());
+    mystatus = rocksdb::BackupEngine::Open(rocksdb::Env::Default(), backup_engine_options, &backup_engine);
+    assert(mystatus.ok());
+    std::vector<rocksdb::BackupInfo> backup_info;
+    backup_engine->GetBackupInfo(&backup_info);
+    for (auto it = backup_info.begin(); it != backup_info.end(); it++) {
+        CheckPointInfo info;
+        info.tipBlockHash = it->app_metadata;
+        info.id = it->backup_id;
+        checkPointList.push_back(info);
+    }
+    delete backup_engine;
+    return checkPointList;
+}
+
+bool ContractDBWrapper::restoreCheckPoint(int targetBackupId)
+{
+    mystatus = db->Close();
+    assert(mystatus.ok());
+    // restore from target checkPoint
+    rocksdb::BackupEngine* backup_engine;
+    rocksdb::BackupEngineOptions backup_engine_options(CheckPointPath.string());
+    rocksdb::Status status = rocksdb::BackupEngine::Open(rocksdb::Env::Default(), backup_engine_options, &backup_engine);
+    if (!status.ok()) {
+        return false;
+    }
+    fs::path path = this->curPath;
+    auto result = backup_engine->RestoreDBFromBackup(targetBackupId, path.string(), path.string());
+    if (!result.ok()) {
+        return false;
+    }
+    delete backup_engine;
+    // reopen db
+    mystatus = rocksdb::DB::Open(rocksdb::Options(), path.string(), &db);
+    assert(mystatus.ok());
+    return true;
+}
+
+void ContractDBWrapper::removeOldCheckPoint(int maxCheckPointCount)
+{
+    // rocksdb backup limit recent checkpoint
+    rocksdb::BackupEngine* backup_engine;
+    rocksdb::BackupEngineOptions backup_engine_options(CheckPointPath.string());
+    rocksdb::Status status = rocksdb::BackupEngine::Open(rocksdb::Env::Default(), backup_engine_options, &backup_engine);
+    assert(status.ok());
+    backup_engine->PurgeOldBackups(maxCheckPointCount);
 }

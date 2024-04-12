@@ -20,7 +20,6 @@ private:
     UpdateStrategyFactory updateStrategyFactory;
 
     bool isSaveCheckPointNow(int height);
-    bool isSaveReadReplicaNow(int height);
     bool isClearCheckPointNow(int height);
 };
 

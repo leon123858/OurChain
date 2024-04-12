@@ -23,22 +23,25 @@ using namespace std;
 typedef uint32_t GNonces;
 #else
 
-extern int DEBUG;
+/*
+Cannot assign variable name as DEBUG. It might be a macro variable defined if using -g config in gcc
+*/
+extern int Debug;
 extern bool (*CONDITION)();
 
 //#define my_debug
 #define my_Eprintf(...) {\
-        printf("\n0x%04x  %s(%i):", DEBUG, __FILE__, __LINE__);\
+        printf("\n0x%04x  %s(%i):", Debug, __FILE__, __LINE__);\
         printf(__VA_ARGS__);\
         printf("\n");\
 }
 #ifdef my_debug
 #define my_eprintf(...) {\
-    if (DEBUG && CONDITION()) {\
-        if (DEBUG&0x08) printf("\033c");\
-        if (DEBUG&0x04) printf("\033[H");\
+    if (Debug && CONDITION()) {\
+        if (Debug&0x08) printf("\033c");\
+        if (Debug&0x04) printf("\033[H");\
         my_Eprintf(__VA_ARGS__);\
-        if (DEBUG&0x02) getchar();\
+        if (Debug&0x02) getchar();\
     }\
 }
 #else

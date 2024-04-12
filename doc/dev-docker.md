@@ -10,19 +10,6 @@
 
 參考 https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers 安裝 vscode container 插件
 
-## 合約試編譯
-
-```sh
-g++ -fPIC -g -c -Wall -o "./aid.o" "./aid.cpp"
-g++ -shared -Wl,-soname,"aid.so" -o "./aid.so" "./aid.o"
-rm -f "./aid.o"
-```
-
-## 合約 runtime 概念設計圖
-
-![image](https://github.com/leon123858/OurChain/assets/56253942/f29f5eef-297a-4574-8275-cc3c1ae455ef)
-
-
 ## 第一次執行
 
 在本專案根目錄執行
@@ -55,13 +42,6 @@ docker run --name our-chain -it -p 8332:8332 our-chain
 ./src/bitcoin-cli callcontract "contract address when deploy" "arg1" "arg2" ...
 # 獲取合約狀態(此為 pure 操作)
 ./src/bitcoin-cli dumpcontractmessage "contract address" ""
-```
-
-若因為 index 問題無法啟動（可以重啟 index 但 scanner API 就不能用了）
-```
-# [0%]...ERROR: ReadBlockFromDisk: Deserialize or I/O error - ReadCompactSize(): size too large: iostream error at CBlockDiskPos(nFile=0, nPos=161438)
-# Please restart with -reindex or -reindex-chainstate to recover.
-./src/bitcoind --regtest --daemon -reindex
 ```
 
 can use `bash ./mytest.sh` run contract commands

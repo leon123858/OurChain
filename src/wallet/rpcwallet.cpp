@@ -29,6 +29,7 @@
 #include "wallet/walletdb.h"
 #include "warnings.h"
 
+#include <dirent.h>
 #include <fstream>
 #include <stdint.h>
 #include <sys/wait.h>
@@ -3336,12 +3337,13 @@ UniValue dumpcontractmessage(const JSONRPCRequest& request)
         for (unsigned i = 1; i < request.params.size(); i++)
             args.push_back(request.params[i].get_str());
     }
-    boost::mutex::scoped_lock lock(tmp_contract_state_access);
-    auto cache = ContractDBWrapper("tmp");
+    ReadLock r_lock(tmp_contract_db_mutex);
+    auto cache = ContractDBWrapper("tmp", "readOnly");
     std::string buf = call_rt_pure(&cache, contract_address, args);
     UniValue uv;
     // const bool ok = uv.read(buf);
     uv.read(buf);
+    r_lock.unlock();
     // assert(ok); // when contract exe error, it will not OK, but it should still run
     return uv;
 }
