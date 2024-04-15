@@ -14,7 +14,7 @@ public:
     ~SnapShot();
 
     void setContractState(uint256 address, json state);
-    json getContractState(uint256 address);
+    json getContractState(std::string address);
     void clear();
     // duplicate sanpshot to checkPoint folder
     void saveCheckPoint(std::string tipBlockHash);
@@ -96,6 +96,8 @@ public:
     void clearCheckPoint(int maxCheckPointCount);
     // get checkPoint list
     std::vector<CheckPointInfo> getCheckPointList();
+    // get contract dir
+    fs::path getContractPath(std::string name);
 
 private:
     BlockCache* blockCache;

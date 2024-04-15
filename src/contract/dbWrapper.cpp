@@ -1,5 +1,6 @@
 #include "contract/dbWrapper.h"
 #include "rocksdb/utilities/backup_engine.h"
+#include <boost/filesystem.hpp>
 
 std::shared_mutex tmp_contract_db_mutex;
 

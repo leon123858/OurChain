@@ -1,18 +1,52 @@
-#include <ourcontract.h>
 #include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/wait.h>
-#include <unistd.h>
+#include <json.hpp>
 
-extern "C" int contract_main(Env env, json *state)
+using json = nlohmann::json;
+
+struct ContractAPI
 {
-  if (env.isPure)
+  // read contract state
+  bool (*readContractState)(std::string *state, std::string *address);
+  // write contract state
+  bool (*writeContractState)(std::string *state, std::string *address);
+};
+
+extern "C" int contract_main(json *arg, void *apiInstance)
+{
+  // cast apiInstance to struct ContractAPI
+  struct ContractAPI *api = (struct ContractAPI *)apiInstance;
+  // read contract state
+  std::string state;
+  std::string address = arg->at("address");
+  if (!api->readContractState(&state, &address))
   {
-    std::cerr << "Pure contract\n";
-    return 0;
+    return 1;
   }
-  std::cerr << "Not pure contract\n";
+  if (state.empty())
+  {
+    // create new state
+    state = "{}";
+    json j = json::parse(state);
+    j["array"] = json::array();
+    j["array"].push_back("init");
+    state = j.dump();
+    if (!api->writeContractState(&state, &address))
+    {
+      return 1;
+    }
+    (*arg)["state"] = j;
+  }
+  else
+  {
+    // update state
+    json j = json::parse(state);
+    j["array"].push_back("update" + std::to_string(j["array"].size()));
+    state = j.dump();
+    if (!api->writeContractState(&state, &address))
+    {
+      return 1;
+    }
+    (*arg)["state"] = j;
+  }
   return 0;
 }

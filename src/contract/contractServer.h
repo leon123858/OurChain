@@ -34,4 +34,11 @@ bool startContractServer();
 bool stopContractServer();
 bool interruptContractServer();
 
+struct ContractAPI {
+    // read contract state
+    bool (*readContractState)(string* state, string* address);
+    // write contract state
+    bool (*writeContractState)(string* state, string* address);
+};
+
 #endif // CONTRACT_SERVER_H

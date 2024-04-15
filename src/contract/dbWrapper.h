@@ -12,6 +12,8 @@
 typedef std::unique_lock<std::shared_mutex> WriteLock;
 typedef std::shared_lock<std::shared_mutex> ReadLock;
 
+#define CONTRACT_DB_DEFAULT_PATH "/root/.bitcoin/regtest/contracts/"
+
 extern std::shared_mutex tmp_contract_db_mutex;
 
 struct CheckPointInfo {
@@ -26,16 +28,20 @@ private:
     rocksdb::Status mystatus;
     rocksdb::WriteOptions writeOptions;
 
-    fs::path getContractDBPath(std::string name)
-    {
-        return GetDataDir() / "contracts" / name;
-    }
     // 保存當前狀態快照到目標位置
     void saveDuplicateState(fs::path path, std::string metadata);
 
 public:
+    fs::path getContractDBPath(std::string name)
+    {
+        std::string basePath = CONTRACT_DB_DEFAULT_PATH;
+        if (basePath.back() != '/')
+            basePath += "/";
+        return fs::path(basePath + name);
+    }
+
     std::string curPath;
-    const fs::path CheckPointPath = GetDataDir() / "contracts" / "checkPoint";
+    const fs::path CheckPointPath = getContractDBPath("checkPoint");
 
     // pre db operation status
     rocksdb::Status getStatus();

@@ -19,7 +19,7 @@ const static fs::path& GetContractsDir()
     return contracts_dir;
 }
 
-static void zmqPushMessage(const std::string& message)
+void zmqPushMessage(const std::string& message, std::string& buf)
 {
     zmq::context_t context(1);
     zmq::socket_t pusher(context, zmq::socket_type::req);
@@ -37,6 +37,7 @@ static void zmqPushMessage(const std::string& message)
     }
     std::string recv_msg(static_cast<char*>(response.data()), response.size());
     LogPrintf("Contract Received response: %s\n", recv_msg.c_str());
+    buf = recv_msg;
     pusher.close();
 }
 
@@ -86,15 +87,21 @@ static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCa
                         LogPrintf("compile contract %s error\n", contract.address.GetHex());
                     }
                     // execute contract
-                    zmqPushMessage("execute contract " + contract.address.GetHex());
+                    string buf;
+                    zmqPushMessage(contract.address.GetHex(), buf);
+                    // log buf
+                    LogPrintf("compile contract %s response: %s\n", contract.address.GetHex(), buf.c_str());
                 });
                 continue;
             }
             assert(tx.get()->contract.action == contract_action::ACTION_CALL);
             boost::asio::post(pool, [tx, &cache]() {
                 auto contract = tx.get()->contract;
+                string buf;
                 // exe contract
-                zmqPushMessage("execute contract " + contract.address.GetHex());
+                zmqPushMessage(contract.address.GetHex(), buf);
+                // log buf
+                LogPrintf("compile contract %s response: %s\n", contract.address.GetHex(), buf.c_str());
             });
         }
         pool.join();

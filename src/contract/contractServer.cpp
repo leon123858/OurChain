@@ -1,15 +1,39 @@
 #include "contract/contractServer.h"
 #include "util.h"
+#include "validation.h"
 #include <atomic>
 #include <condition_variable>
+#include <dlfcn.h>
+#include <json.hpp>
 #include <sys/syscall.h>
+#include <sys/sysinfo.h>
 #include <unistd.h>
 #include <zmq.hpp>
 
 using namespace std;
 using namespace zmq;
+using namespace nlohmann;
 
 atomic<bool> stopFlag(false);
+
+thread_local struct ContractAPI apiInstance = {
+    .readContractState = nullptr,
+    .writeContractState = nullptr,
+};
+
+static bool readContractCache(string* state, string* hex_ctid)
+{
+    json j = contractStateCache.getSnapShot()->getContractState(*hex_ctid);
+    *state = j.dump();
+    return true;
+}
+
+static bool writeContractCache(string* state, string* hex_ctid)
+{
+    json j = json::parse(*state);
+    contractStateCache.getSnapShot()->setContractState(uint256S(*hex_ctid), j);
+    return true;
+}
 
 ContractServer::ContractServer()
 {
@@ -26,8 +50,16 @@ ContractServer::~ContractServer()
     LogPrintf("contract server destroyed\n");
 }
 
+static void responseZmqMessage(zmq::socket_t& socket, const string& response)
+{
+    zmq::message_t message(response.size());
+    memcpy(message.data(), response.c_str(), response.size());
+    socket.send(message, zmq::send_flags::none);
+}
+
 void ContractServer::workerThread()
 {
+    RenameThread("contract-worker");
     context_t context(1);
     zmq::socket_t puller(context, zmq::socket_type::rep);
     puller.connect("tcp://127.0.0.1:5560");
@@ -39,11 +71,46 @@ void ContractServer::workerThread()
             std::string recv_msg(static_cast<char*>(message.data()), message.size());
             LogPrintf("Contract Received message: %s\n", recv_msg.c_str());
             // process message
-            // TODO: process message
-            // send response
-            zmq::message_t response(2);
-            memcpy(response.data(), "OK", 2);
-            puller.send(response, zmq::send_flags::none);
+            auto address = recv_msg.c_str();
+            auto contractPath = contractStateCache.getContractPath(address) / "code.so";
+            if (!fs::exists(contractPath)) {
+                LogPrintf("Contract not found: %s\n", contractPath.string());
+                responseZmqMessage(puller, "FAILED");
+                continue;
+            }
+            // execute contract
+            void* handle = dlopen(contractPath.c_str(), RTLD_LAZY);
+            if (!handle) {
+                LogPrintf("Failed to load contract: %s\n", dlerror());
+                responseZmqMessage(puller, "FAILED");
+                continue;
+            }
+            int (*contract_main)(json*, ContractAPI*) = (int (*)(json*, ContractAPI*))dlsym(handle, "contract_main");
+            if (!contract_main) {
+                LogPrintf("Failed to load contract_main: %s\n", dlerror());
+                responseZmqMessage(puller, "FAILED");
+                dlclose(handle);
+                continue;
+            }
+            apiInstance.readContractState = readContractCache;
+            apiInstance.writeContractState = writeContractCache;
+            json arg = json::object();
+            arg["address"] = address;
+            arg["state"] = json::object();
+            try {
+                int ret = contract_main(&arg, &apiInstance);
+                if (ret != 0) {
+                    throw runtime_error("Contract execution failed");
+                }
+            } catch (const std::exception& e) {
+                LogPrintf("Failed to get contract state: %s\n", e.what());
+                responseZmqMessage(puller, "FAILED");
+                dlclose(handle);
+                continue;
+            }
+            // send state
+            responseZmqMessage(puller, arg["state"].dump());
+            dlclose(handle);
         } else {
             if (stopFlag.load()) {
                 break;
@@ -55,6 +122,7 @@ void ContractServer::workerThread()
 
 void ContractServer::proxyThread()
 {
+    RenameThread("contract-proxy");
     context_t context(1);
     zmq::socket_t frontend(context, zmq::socket_type::router);
     zmq::socket_t backend(context, zmq::socket_type::dealer);

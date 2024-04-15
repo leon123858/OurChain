@@ -101,6 +101,9 @@ CScript COINBASE_FLAGS;
 
 const std::string strMessageMagic = "Bitcoin Signed Message:\n";
 
+// Contract State
+ContractStateCache contractStateCache;
+
 // Internal stuff
 namespace
 {
@@ -2495,7 +2498,6 @@ bool ActivateBestChain(CValidationState& state, const CChainParams& chainparams,
     }
 
     {
-        ContractStateCache contractStateCache;
         ContractObserver observer(&contractStateCache);
         if (!observer.onChainStateSet(chainActive, chainparams.GetConsensus())) {
             return false;
