@@ -1,29 +1,25 @@
 #include <iostream>
 #include <json.hpp>
+#include "ourcontract.h"
 
-using namespace std;
 using json = nlohmann::json;
+using namespace std;
 
-struct ContractAPI
+// contract main function
+extern "C" int contract_main(void *arg)
 {
-  // read contract state
-  std::function<bool(string *, string *)> readContractState;
-  // write contract state
-  std::function<bool(string *, string *)> writeContractState;
-};
-
-extern "C" int contract_main(json *arg, void *apiInstance)
-{
-  // cast apiInstance to struct ContractAPI
-  struct ContractAPI *api = (struct ContractAPI *)apiInstance;
+  // cast argument
+  ContractArguments *contractArg = (ContractArguments *)arg;
+  ContractAPI *api = &contractArg->api;
   // read contract state
   std::string state;
-  std::string address = arg->at("address");
+  std::string address = contractArg->address;
   if (!api->readContractState(&state, &address))
   {
     return 1;
   }
-  if (state.empty())
+  api->contractLog("state: " + state);
+  if (state == "null")
   {
     // create new state
     state = "{}";
@@ -35,7 +31,6 @@ extern "C" int contract_main(json *arg, void *apiInstance)
     {
       return 1;
     }
-    (*arg)["state"] = j;
   }
   else
   {
@@ -47,7 +42,6 @@ extern "C" int contract_main(json *arg, void *apiInstance)
     {
       return 1;
     }
-    (*arg)["state"] = j;
   }
   return 0;
 }

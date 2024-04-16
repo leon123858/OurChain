@@ -16,11 +16,6 @@ using namespace nlohmann;
 
 atomic<bool> stopFlag(false);
 
-thread_local struct ContractAPI apiInstance = {
-    .readContractState = nullptr,
-    .writeContractState = nullptr,
-};
-
 static bool readContractCache(string* state, string* hex_ctid)
 {
     json j = contractStateCache.getSnapShot()->getContractState(*hex_ctid);
@@ -85,26 +80,34 @@ void ContractServer::workerThread()
                 responseZmqMessage(puller, "FAILED");
                 continue;
             }
-            int (*contract_main)(json*, ContractAPI*) = (int (*)(json*, ContractAPI*))dlsym(handle, "contract_main");
+            int (*contract_main)(ContractArguments*) = (int (*)(ContractArguments*))dlsym(handle, "contract_main");
             if (!contract_main) {
                 LogPrintf("Failed to load contract_main: %s\n", dlerror());
                 responseZmqMessage(puller, "FAILED");
                 dlclose(handle);
                 continue;
             }
+            std::string state_buf = "{}";
             std::function<bool(string*, string*)> readFunc = [](string* state, string* address) {
                 return readContractCache(state, address);
             };
-            std::function<bool(string*, string*)> writeFunc = [](string* state, string* address) {
+            std::function<bool(string*, string*)> writeFunc = [&state_buf](string* state, string* address) {
+                state_buf = *state;
                 return writeContractCache(state, address);
             };
-            apiInstance.readContractState = readFunc;
-            apiInstance.writeContractState = writeFunc;
-            json arg = json::object();
-            arg["address"] = address;
-            arg["state"] = json::object();
+            std::function<void(string)> logFunc = [](string log) {
+                LogPrintf("Contract log: %s\n", log.c_str());
+            };
+            ContractArguments arg = {
+                .api = {
+                    .readContractState = readFunc,
+                    .writeContractState = writeFunc,
+                    .contractLog = logFunc,
+                },
+                .address = address,
+            };
             try {
-                int ret = contract_main(&arg, &apiInstance);
+                int ret = contract_main(&arg);
                 if (ret != 0) {
                     throw runtime_error("Contract execution failed");
                 }
@@ -115,7 +118,7 @@ void ContractServer::workerThread()
                 continue;
             }
             // send state
-            responseZmqMessage(puller, arg["state"].dump());
+            responseZmqMessage(puller, state_buf);
             dlclose(handle);
         } else {
             if (stopFlag.load()) {

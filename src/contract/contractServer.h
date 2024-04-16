@@ -3,6 +3,7 @@
 
 #define CONTRACT_SERVER_THREADS 4
 
+#include <json/json.hpp>
 #include <thread>
 #include <vector>
 #include <zmq.hpp>
@@ -39,6 +40,15 @@ struct ContractAPI {
     std::function<bool(string*, string*)> readContractState;
     // write contract state
     std::function<bool(string*, string*)> writeContractState;
+    // print log
+    std::function<void(string)> contractLog;
+};
+
+struct ContractArguments {
+    // contract api interface
+    ContractAPI api;
+    // contract address
+    string address;
 };
 
 #endif // CONTRACT_SERVER_H
