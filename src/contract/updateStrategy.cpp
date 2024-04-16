@@ -18,7 +18,16 @@ const static fs::path& GetContractsDir()
     return contracts_dir;
 }
 
-void zmqPushMessage(const std::string& message, std::string& buf)
+std::string parseZmqMsg(bool isPure, const std::string& address, vector<string> parameters)
+{
+    json j;
+    j["isPure"] = isPure;
+    j["address"] = address;
+    j["parameters"] = parameters;
+    return j.dump();
+}
+
+void zmqPushMessage(const std::string& message, std::string* buf)
 {
     zmq::context_t context(1);
     zmq::socket_t pusher(context, zmq::socket_type::req);
@@ -36,7 +45,9 @@ void zmqPushMessage(const std::string& message, std::string& buf)
     }
     std::string recv_msg(static_cast<char*>(response.data()), response.size());
     LogPrintf("Contract Received response: %s\n", recv_msg.c_str());
-    buf = recv_msg;
+    if (buf != nullptr) {
+        *buf = recv_msg;
+    }
     pusher.close();
 }
 
@@ -86,21 +97,15 @@ static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCa
                         LogPrintf("compile contract %s error\n", contract.address.GetHex());
                     }
                     // execute contract
-                    string buf;
-                    zmqPushMessage(contract.address.GetHex(), buf);
-                    // log buf
-                    LogPrintf("compile contract %s response: %s\n", contract.address.GetHex(), buf.c_str());
+                    zmqPushMessage(parseZmqMsg(false, contract.address.GetHex(), contract.args), nullptr);
                 });
                 continue;
             }
             assert(tx.get()->contract.action == contract_action::ACTION_CALL);
             boost::asio::post(pool, [tx, &cache]() {
                 auto contract = tx.get()->contract;
-                string buf;
                 // exe contract
-                zmqPushMessage(contract.address.GetHex(), buf);
-                // log buf
-                LogPrintf("compile contract %s response: %s\n", contract.address.GetHex(), buf.c_str());
+                zmqPushMessage(parseZmqMsg(false, contract.address.GetHex(), contract.args), nullptr);
             });
         }
         pool.join();

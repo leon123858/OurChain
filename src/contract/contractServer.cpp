@@ -14,6 +14,7 @@ using namespace std;
 using namespace zmq;
 using namespace nlohmann;
 
+ContractServer* server = nullptr;
 atomic<bool> stopFlag(false);
 
 static bool readContractCache(string* state, string* hex_ctid)
@@ -52,6 +53,17 @@ static void responseZmqMessage(zmq::socket_t& socket, const string& response)
     socket.send(message, zmq::send_flags::none);
 }
 
+static struct zmqMsg parseZmqMsg(const string& message)
+{
+    json j = json::parse(message);
+    struct zmqMsg msg = {
+        .address = j["address"],
+        .parameters = j["parameters"],
+        .isPure = j["isPure"],
+    };
+    return msg;
+}
+
 void ContractServer::workerThread()
 {
     RenameThread("contract-worker");
@@ -65,8 +77,10 @@ void ContractServer::workerThread()
         if (result) {
             std::string recv_msg(static_cast<char*>(message.data()), message.size());
             LogPrintf("Contract Received message: %s\n", recv_msg.c_str());
+            // convert message to json to struct
+            auto msg = parseZmqMsg(recv_msg);
             // process message
-            auto address = recv_msg.c_str();
+            auto address = msg.address;
             auto contractPath = contractStateCache.getContractPath(address) / "code.so";
             if (!fs::exists(contractPath)) {
                 LogPrintf("Contract not found: %s\n", contractPath.string());
@@ -91,8 +105,11 @@ void ContractServer::workerThread()
             std::function<bool(string*, string*)> readFunc = [](string* state, string* address) {
                 return readContractCache(state, address);
             };
-            std::function<bool(string*, string*)> writeFunc = [&state_buf](string* state, string* address) {
-                state_buf = *state;
+            std::function<bool(string*, string*)> writeFunc = [msg, &state_buf](string* state, string* address) {
+                if (msg.isPure) {
+                    state_buf = *state;
+                    return true;
+                }
                 return writeContractCache(state, address);
             };
             std::function<void(string)> logFunc = [](string log) {
@@ -105,6 +122,8 @@ void ContractServer::workerThread()
                     .contractLog = logFunc,
                 },
                 .address = address,
+                .isPureCall = msg.isPure,
+                .parameters = msg.parameters,
             };
             try {
                 int ret = contract_main(&arg);

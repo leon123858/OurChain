@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -20,6 +21,10 @@ struct ContractArguments {
     ContractAPI api;
     // contract address
     string address;
+    // is pure call contract or not
+    bool isPureCall;
+    // parameters
+    vector<string> parameters;
 };
 
 #endif // BITCOIN_CONTRACT_OURCONTRACT_H

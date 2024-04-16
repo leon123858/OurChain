@@ -273,6 +273,7 @@ libbitcoin_wallet_a_SOURCES = \
   contract/observer.cpp \
   contract/dbWrapper.cpp \
   contract/cache.cpp \
+  contract/contractServer.cpp \
   $(BITCOIN_CORE_H)
 
 # crypto primitives library

@@ -28,7 +28,13 @@ private:
     void proxyThread();
 };
 
-static ContractServer* server = nullptr;
+extern ContractServer* server;
+
+struct zmqMsg {
+    string address;
+    vector<string> parameters;
+    bool isPure;
+};
 
 bool contractServerInit();
 bool startContractServer();
@@ -49,6 +55,10 @@ struct ContractArguments {
     ContractAPI api;
     // contract address
     string address;
+    // is pure call contract or not
+    bool isPureCall = false;
+    // parameters
+    vector<string> parameters = {};
 };
 
 #endif // CONTRACT_SERVER_H

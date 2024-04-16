@@ -3331,7 +3331,7 @@ UniValue dumpcontractmessage(const JSONRPCRequest& request)
     }
 
     // execute contract and get method output
-    uint256 contract_address = uint256S(request.params[0].get_str());
+    const std::string address_str = request.params[0].get_str();
     std::vector<std::string> args = {};
     if (request.params.size() > 1) {
         for (unsigned i = 1; i < request.params.size(); i++)
@@ -3339,16 +3339,16 @@ UniValue dumpcontractmessage(const JSONRPCRequest& request)
     }
     ReadLock r_lock(tmp_contract_db_mutex);
     // use zmq send to contract
-    const std::string address_str = request.params[0].get_str();
     std::string buf;
-    zmqPushMessage(address_str, buf);
+    auto msg = parseZmqMsg(true, address_str, args);
+    zmqPushMessage(msg, &buf);
     UniValue uv;
     const bool ok = uv.read(buf);
     r_lock.unlock();
     if (!ok) {
         // set uv as {message: "return not json format"}
         uv.setObject();
-        uv.pushKV("message", "return not json format");
+        uv.pushKV("error", buf.c_str());
     }
     return uv;
 }

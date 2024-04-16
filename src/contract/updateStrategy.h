@@ -14,7 +14,9 @@ enum UpdateStrategyType {
     UpdateStrategyTypeRollback = 3
 };
 
-void zmqPushMessage(const std::string& message, std::string& buf);
+std::string parseZmqMsg(bool isPure, const std::string& address, std::vector<std::string> parameters);
+
+void zmqPushMessage(const std::string& message, std::string* buf);
 
 class UpdateStrategy
 {
