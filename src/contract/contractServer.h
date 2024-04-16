@@ -4,6 +4,7 @@
 #define CONTRACT_SERVER_THREADS 4
 
 #include <json/json.hpp>
+#include <mutex>
 #include <stack>
 #include <thread>
 #include <vector>
@@ -90,6 +91,8 @@ struct ContractArguments {
     string preTxid;
     // call stack
     stack<ContractLocalState*>* stateStack;
+    // mtx
+    mutex* mtx;
 };
 
 #endif // CONTRACT_SERVER_H

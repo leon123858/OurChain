@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <dlfcn.h>
 #include <json/json.hpp>
+#include <mutex>
 #include <stack>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
@@ -164,6 +165,7 @@ void ContractServer::workerThread()
             auto address = msg.address;
             auto isPure = msg.isPure;
             auto stateStack = new std::stack<ContractLocalState*>;
+            auto mtx = new std::mutex;
             std::string state_buf = "{}";
             // init lamda function
             std::function<string()> readFunc = [stateStack]() {
@@ -241,6 +243,7 @@ void ContractServer::workerThread()
                 .parameters = msg.parameters,
                 .preTxid = msg.preTxid,
                 .stateStack = stateStack,
+                .mtx = mtx,
             };
             // execute contract
             if (!callFunc(&arg)) {

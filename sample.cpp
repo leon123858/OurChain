@@ -26,7 +26,9 @@ extern "C" int contract_main(void *arg)
       // pure operation
       string state = api->readContractState();
       json j = json::parse(state);
+      contractArg->mtx->lock();
       j.push_back("pure click: " + std::to_string((size_t)j.size()));
+      contractArg->mtx->unlock();
       // pure output
       state = j.dump();
       api->writeContractState(&state);

@@ -2,6 +2,7 @@
 #define BITCOIN_CONTRACT_OURCONTRACT_H
 
 #include <functional>
+#include <mutex>
 #include <stack>
 #include <string>
 #include <vector>
@@ -55,6 +56,8 @@ struct ContractArguments {
     string preTxid;
     // call stack
     stack<ContractLocalState*>* stateStack;
+    // mtx
+    mutex* mtx;
 };
 
 #endif // BITCOIN_CONTRACT_OURCONTRACT_H
