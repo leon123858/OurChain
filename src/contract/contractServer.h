@@ -4,6 +4,7 @@
 #define CONTRACT_SERVER_THREADS 4
 
 #include <json/json.hpp>
+#include <stack>
 #include <thread>
 #include <vector>
 #include <zmq.hpp>
@@ -34,6 +35,7 @@ struct zmqMsg {
     string address;
     vector<string> parameters;
     bool isPure;
+    string preTxid;
 };
 
 bool contractServerInit();
@@ -41,13 +43,38 @@ bool startContractServer();
 bool stopContractServer();
 bool interruptContractServer();
 
+// contract interface
+class ContractLocalState
+{
+private:
+    string state;
+    string preState;
+
+public:
+    ContractLocalState(std::string stateStr);
+    ~ContractLocalState();
+    void setState(string state);
+    void setPreState(string preState);
+    string getPreState();
+    string getState();
+    bool isStateNull();
+};
+
+struct ContractArguments;
+
 struct ContractAPI {
     // read contract state
-    std::function<bool(string*, string*)> readContractState;
+    std::function<string()> readContractState;
+    // read pre contract state
+    std::function<string()> readPreContractState;
     // write contract state
-    std::function<bool(string*, string*)> writeContractState;
+    std::function<bool(string*)> writeContractState;
+    // write general contract interface output
+    std::function<void(string, string)> generalContractInterfaceOutput;
     // print log
     std::function<void(string)> contractLog;
+    // recursive call contract
+    std::function<bool(ContractArguments*)> recursiveCall;
 };
 
 struct ContractArguments {
@@ -59,6 +86,10 @@ struct ContractArguments {
     bool isPureCall = false;
     // parameters
     vector<string> parameters = {};
+    // pre txid
+    string preTxid;
+    // call stack
+    stack<ContractLocalState*>* stateStack;
 };
 
 #endif // CONTRACT_SERVER_H

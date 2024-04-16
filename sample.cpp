@@ -18,42 +18,24 @@ extern "C" int contract_main(void *arg)
     api->contractLog("command: " + command);
     if (command == "get")
     {
-      json j;
-      j["name"] = "example";
-      j["version"] = "0.1.0";
-      // write contract state
-      auto state = j.dump();
-      if (!api->writeContractState(&state, &contractArg->address))
-      {
-        return 1;
-      }
+      api->generalContractInterfaceOutput("example", "0.1.0");
       return 0;
     }
     else
     {
       // pure operation
-      string state = "";
-      if (!api->readContractState(&state, &contractArg->address))
-      {
-        return 1;
-      }
+      string state = api->readContractState();
       json j = json::parse(state);
       j.push_back("pure click: " + std::to_string((size_t)j.size()));
       // pure output
       state = j.dump();
-      if (!api->writeContractState(&state, &contractArg->address))
-      {
-        return 1;
-      }
+      api->writeContractState(&state);
       return 0;
     }
   }
   // non-pure call contract
-  string state = "";
-  if (!api->readContractState(&state, &contractArg->address))
-  {
-    return 1;
-  }
+  string state = api->readContractState();
+  // deploy contract init call
   if (state == "null")
   {
     json j;
@@ -62,19 +44,15 @@ extern "C" int contract_main(void *arg)
     j.push_back(true);
     // write contract state
     state = j.dump();
-    if (!api->writeContractState(&state, &contractArg->address))
-    {
-      return 1;
-    }
+    api->writeContractState(&state);
     return 0;
   }
   json j = json::parse(state);
   j.push_back("more click: " + std::to_string((size_t)j.size()));
   // write contract state
   state = j.dump();
-  if (!api->writeContractState(&state, &contractArg->address))
-  {
-    return 1;
-  }
+  api->writeContractState(&state);
+  // log pre txid
+  api->contractLog("pre txid: " + contractArg->preTxid);
   return 0;
 }

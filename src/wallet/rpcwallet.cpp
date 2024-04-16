@@ -3340,7 +3340,7 @@ UniValue dumpcontractmessage(const JSONRPCRequest& request)
     ReadLock r_lock(tmp_contract_db_mutex);
     // use zmq send to contract
     std::string buf;
-    auto msg = parseZmqMsg(true, address_str, args);
+    auto msg = parseZmqMsg(true, address_str, args, "");
     zmqPushMessage(msg, &buf);
     UniValue uv;
     const bool ok = uv.read(buf);

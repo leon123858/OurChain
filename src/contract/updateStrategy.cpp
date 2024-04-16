@@ -18,12 +18,13 @@ const static fs::path& GetContractsDir()
     return contracts_dir;
 }
 
-std::string parseZmqMsg(bool isPure, const std::string& address, vector<string> parameters)
+std::string parseZmqMsg(bool isPure, const std::string& address, vector<string> parameters, std::string preTxid)
 {
     json j;
     j["isPure"] = isPure;
     j["address"] = address;
     j["parameters"] = parameters;
+    j["preTxid"] = preTxid;
     return j.dump();
 }
 
@@ -97,7 +98,8 @@ static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCa
                         LogPrintf("compile contract %s error\n", contract.address.GetHex());
                     }
                     // execute contract
-                    zmqPushMessage(parseZmqMsg(false, contract.address.GetHex(), contract.args), nullptr);
+                    string preTxid = tx.get()->GetHash().GetHex();
+                    zmqPushMessage(parseZmqMsg(false, contract.address.GetHex(), contract.args, preTxid), nullptr);
                 });
                 continue;
             }
@@ -105,7 +107,8 @@ static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCa
             boost::asio::post(pool, [tx, &cache]() {
                 auto contract = tx.get()->contract;
                 // exe contract
-                zmqPushMessage(parseZmqMsg(false, contract.address.GetHex(), contract.args), nullptr);
+                string preTxid = tx.get()->GetHash().GetHex();
+                zmqPushMessage(parseZmqMsg(false, contract.address.GetHex(), contract.args, preTxid), nullptr);
             });
         }
         pool.join();

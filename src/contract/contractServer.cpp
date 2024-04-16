@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <dlfcn.h>
 #include <json/json.hpp>
+#include <stack>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
@@ -17,6 +18,50 @@ using namespace nlohmann;
 ContractServer* server = nullptr;
 atomic<bool> stopFlag(false);
 
+ContractLocalState::ContractLocalState(std::string stateStr)
+{
+    // try to parse json
+    json j = json::parse(stateStr);
+    // if failed, set state to null
+    if (j.is_null()) {
+        this->state = "null";
+        return;
+    }
+    this->state = stateStr;
+}
+
+ContractLocalState::~ContractLocalState()
+{
+}
+
+string ContractLocalState::getState()
+{
+    return this->state;
+}
+
+void ContractLocalState::setState(string state)
+{
+    this->state = state;
+}
+
+bool ContractLocalState::isStateNull()
+{
+    return this->state == "null";
+}
+
+void ContractLocalState::setPreState(string preState)
+{
+    this->preState = preState;
+}
+
+string ContractLocalState::getPreState()
+{
+    if (this->preState.empty()) {
+        return "null";
+    }
+    return this->preState;
+}
+
 static bool readContractCache(string* state, string* hex_ctid)
 {
     json j = contractStateCache.getSnapShot()->getContractState(*hex_ctid);
@@ -26,8 +71,44 @@ static bool readContractCache(string* state, string* hex_ctid)
 
 static bool writeContractCache(string* state, string* hex_ctid)
 {
+    if (*state == "null") {
+        *state = "{}";
+    }
     json j = json::parse(*state);
     contractStateCache.getSnapShot()->setContractState(uint256S(*hex_ctid), j);
+    return true;
+}
+
+static bool callContract(string* hex_ctid, ContractArguments* arg)
+{
+    auto contractPath = contractStateCache.getContractPath(*hex_ctid) / "code.so";
+    if (!fs::exists(contractPath)) {
+        LogPrintf("Contract not found: %s\n", contractPath.string());
+        return false;
+    }
+    // execute contract
+    void* handle = dlopen(contractPath.c_str(), RTLD_LAZY);
+    if (!handle) {
+        LogPrintf("Failed to load contract: %s\n", dlerror());
+        return false;
+    }
+    int (*contract_main)(ContractArguments*) = (int (*)(ContractArguments*))dlsym(handle, "contract_main");
+    if (!contract_main) {
+        LogPrintf("Failed to load contract_main: %s\n", dlerror());
+        dlclose(handle);
+        return false;
+    }
+    try {
+        int ret = contract_main(arg);
+        if (ret != 0) {
+            throw runtime_error("Contract execution failed");
+        }
+    } catch (const std::exception& e) {
+        LogPrintf("Failed to get contract state: %s\n", e.what());
+        dlclose(handle);
+        return false;
+    }
+    dlclose(handle);
     return true;
 }
 
@@ -60,6 +141,7 @@ static struct zmqMsg parseZmqMsg(const string& message)
         .address = j["address"],
         .parameters = j["parameters"],
         .isPure = j["isPure"],
+        .preTxid = j["preTxid"],
     };
     return msg;
 }
@@ -79,66 +161,96 @@ void ContractServer::workerThread()
             LogPrintf("Contract Received message: %s\n", recv_msg.c_str());
             // convert message to json to struct
             auto msg = parseZmqMsg(recv_msg);
-            // process message
             auto address = msg.address;
-            auto contractPath = contractStateCache.getContractPath(address) / "code.so";
-            if (!fs::exists(contractPath)) {
-                LogPrintf("Contract not found: %s\n", contractPath.string());
-                responseZmqMessage(puller, "FAILED");
-                continue;
-            }
-            // execute contract
-            void* handle = dlopen(contractPath.c_str(), RTLD_LAZY);
-            if (!handle) {
-                LogPrintf("Failed to load contract: %s\n", dlerror());
-                responseZmqMessage(puller, "FAILED");
-                continue;
-            }
-            int (*contract_main)(ContractArguments*) = (int (*)(ContractArguments*))dlsym(handle, "contract_main");
-            if (!contract_main) {
-                LogPrintf("Failed to load contract_main: %s\n", dlerror());
-                responseZmqMessage(puller, "FAILED");
-                dlclose(handle);
-                continue;
-            }
+            auto isPure = msg.isPure;
+            auto stateStack = new std::stack<ContractLocalState*>;
             std::string state_buf = "{}";
-            std::function<bool(string*, string*)> readFunc = [](string* state, string* address) {
-                return readContractCache(state, address);
+            // init lamda function
+            std::function<string()> readFunc = [stateStack]() {
+                auto top = stateStack->top();
+                return top->getState();
             };
-            std::function<bool(string*, string*)> writeFunc = [msg, &state_buf](string* state, string* address) {
-                if (msg.isPure) {
-                    state_buf = *state;
-                    return true;
-                }
-                return writeContractCache(state, address);
+            std::function<string()> readPreFunc = [stateStack]() {
+                auto top = stateStack->top();
+                return top->getPreState();
+            };
+            std::function<bool(string, string)> writeGeneralInterface = [stateStack](string name, string version) {
+                json j = json::object();
+                j["name"] = name;
+                j["version"] = version;
+                string state = j.dump();
+                auto top = stateStack->top();
+                top->setState(state);
+                return true;
+            };
+            std::function<bool(string*)> writeFunc = [stateStack](string* state) {
+                auto top = stateStack->top();
+                top->setState(*state);
+                return true;
             };
             std::function<void(string)> logFunc = [](string log) {
                 LogPrintf("Contract log: %s\n", log.c_str());
             };
+            std::function<bool(ContractArguments*)> callFunc = [&state_buf, isPure, stateStack, &address](ContractArguments* arg) {
+                // read contract state in disk
+                string state = "";
+                if (!readContractCache(&state, &arg->address)) {
+                    return false;
+                }
+                // push state to stack
+                stateStack->push(new ContractLocalState(state));
+                // call contract
+                if (!callContract(&arg->address, arg)) {
+                    return false;
+                }
+                // pop state from stack
+                auto tmp = stateStack->top();
+                std::string buf = tmp->getState();
+                stateStack->pop();
+                delete tmp;
+                if (stateStack->size() == 0) {
+                    // write state to DB or pure output
+                    if (isPure) {
+                        state_buf = buf;
+                    } else {
+                        if (buf == "null") {
+                            buf = "{}";
+                        }
+                        if (!writeContractCache(&buf, &address)) {
+                            return false;
+                        }
+                    }
+                } else {
+                    // write state to parent contract
+                    auto top = stateStack->top();
+                    top->setPreState(buf);
+                }
+                return true;
+            };
             ContractArguments arg = {
                 .api = {
                     .readContractState = readFunc,
+                    .readPreContractState = readPreFunc,
                     .writeContractState = writeFunc,
+                    .generalContractInterfaceOutput = writeGeneralInterface,
                     .contractLog = logFunc,
+                    .recursiveCall = callFunc,
                 },
                 .address = address,
                 .isPureCall = msg.isPure,
                 .parameters = msg.parameters,
+                .preTxid = msg.preTxid,
+                .stateStack = stateStack,
             };
-            try {
-                int ret = contract_main(&arg);
-                if (ret != 0) {
-                    throw runtime_error("Contract execution failed");
-                }
-            } catch (const std::exception& e) {
-                LogPrintf("Failed to get contract state: %s\n", e.what());
+            // execute contract
+            if (!callFunc(&arg)) {
                 responseZmqMessage(puller, "FAILED");
-                dlclose(handle);
+                delete stateStack;
                 continue;
             }
             // send state
             responseZmqMessage(puller, state_buf);
-            dlclose(handle);
+            delete stateStack;
         } else {
             if (stopFlag.load()) {
                 break;
