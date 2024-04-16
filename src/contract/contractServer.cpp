@@ -92,8 +92,14 @@ void ContractServer::workerThread()
                 dlclose(handle);
                 continue;
             }
-            apiInstance.readContractState = readContractCache;
-            apiInstance.writeContractState = writeContractCache;
+            std::function<bool(string*, string*)> readFunc = [](string* state, string* address) {
+                return readContractCache(state, address);
+            };
+            std::function<bool(string*, string*)> writeFunc = [](string* state, string* address) {
+                return writeContractCache(state, address);
+            };
+            apiInstance.readContractState = readFunc;
+            apiInstance.writeContractState = writeFunc;
             json arg = json::object();
             arg["address"] = address;
             arg["state"] = json::object();

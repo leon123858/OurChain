@@ -1,14 +1,15 @@
 #include <iostream>
 #include <json.hpp>
 
+using namespace std;
 using json = nlohmann::json;
 
 struct ContractAPI
 {
   // read contract state
-  bool (*readContractState)(std::string *state, std::string *address);
+  std::function<bool(string *, string *)> readContractState;
   // write contract state
-  bool (*writeContractState)(std::string *state, std::string *address);
+  std::function<bool(string *, string *)> writeContractState;
 };
 
 extern "C" int contract_main(json *arg, void *apiInstance)

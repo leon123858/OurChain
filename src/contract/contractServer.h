@@ -36,9 +36,9 @@ bool interruptContractServer();
 
 struct ContractAPI {
     // read contract state
-    bool (*readContractState)(string* state, string* address);
+    std::function<bool(string*, string*)> readContractState;
     // write contract state
-    bool (*writeContractState)(string* state, string* address);
+    std::function<bool(string*, string*)> writeContractState;
 };
 
 #endif // CONTRACT_SERVER_H
