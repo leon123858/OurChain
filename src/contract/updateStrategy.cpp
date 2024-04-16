@@ -1,5 +1,4 @@
 #include "contract/updateStrategy.h"
-#include "contract/ourcontract.h"
 #include "contract/processing.h"
 #include <boost/asio.hpp>
 #include <future>
