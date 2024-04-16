@@ -39,7 +39,7 @@ EXPOSE 8332
 
 # init
 RUN ~/Desktop/ourchain/autogen.sh
-RUN ~/Desktop/ourchain/configure --without-gui --with-incompatible-bdb
+RUN ~/Desktop/ourchain/configure --without-gui --with-incompatible-bdb --disable-tests
 
 # set config
 RUN mkdir ~/.bitcoin/

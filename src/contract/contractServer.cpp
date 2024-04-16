@@ -4,7 +4,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <dlfcn.h>
-#include <json.hpp>
+#include <json/json.hpp>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
