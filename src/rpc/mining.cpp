@@ -134,10 +134,11 @@ UniValue generateBlocks(std::shared_ptr<CReserveScript> coinbaseScript, int nGen
     while (nHeight < nHeightEnd) {
 #ifdef ENABLE_GPoW
         this_round_time = THIS_ROUND_START;
+        // can commit the block to enable mining when no tx
         if (nHeight > 2 && mempool.size() == 0) { // For demo. if no transaction, don't mining and wait for round expired.
             this_round_time = THIS_ROUND_START;
             std::unique_lock<std::mutex> lock(cs_roundchange);
-            cond_roundchange.wait(lock, [this_round_time]{return THIS_ROUND_START != this_round_time || !IsRPCRunning();});
+            cond_roundchange.wait(lock, [this_round_time] { return THIS_ROUND_START != this_round_time || !IsRPCRunning(); });
             return blockHashes;
         }
 

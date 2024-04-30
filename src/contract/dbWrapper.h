@@ -12,8 +12,6 @@
 typedef std::unique_lock<std::shared_mutex> WriteLock;
 typedef std::shared_lock<std::shared_mutex> ReadLock;
 
-#define CONTRACT_DB_DEFAULT_PATH "/root/.bitcoin/regtest/contracts/"
-
 extern std::shared_mutex tmp_contract_db_mutex;
 
 struct CheckPointInfo {
@@ -34,10 +32,7 @@ private:
 public:
     fs::path getContractDBPath(std::string name)
     {
-        std::string basePath = CONTRACT_DB_DEFAULT_PATH;
-        if (basePath.back() != '/')
-            basePath += "/";
-        return fs::path(basePath + name);
+        return (GetDefaultDataDir() / "regtest" / "contracts" / name);
     }
 
     std::string curPath;
