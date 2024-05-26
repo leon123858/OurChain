@@ -65,7 +65,7 @@ string ContractLocalState::getPreState()
 
 static bool readContractCache(string* state, string* hex_ctid)
 {
-    json j = contractStateCache.getSnapShot()->getContractState(*hex_ctid);
+    json j = contractStateCache->getSnapShot()->getContractState(*hex_ctid);
     *state = j.dump();
     return true;
 }
@@ -76,13 +76,13 @@ static bool writeContractCache(string* state, string* hex_ctid)
         *state = "{}";
     }
     json j = json::parse(*state);
-    contractStateCache.getSnapShot()->setContractState(uint256S(*hex_ctid), j);
+    contractStateCache->getSnapShot()->setContractState(uint256S(*hex_ctid), j);
     return true;
 }
 
 static bool callContract(string* hex_ctid, ContractArguments* arg)
 {
-    auto contractPath = contractStateCache.getContractPath(*hex_ctid) / "code.so";
+    auto contractPath = contractStateCache->getContractPath(*hex_ctid) / "code.so";
     if (!fs::exists(contractPath)) {
         LogPrintf("Contract not found: %s\n", contractPath.string());
         return false;

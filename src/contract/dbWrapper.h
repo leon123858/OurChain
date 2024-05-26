@@ -32,7 +32,7 @@ private:
 public:
     fs::path getContractDBPath(std::string name)
     {
-        return (GetDefaultDataDir() / "regtest" / "contracts" / name);
+        return (GetDataDir() / "contracts" / name);
     }
 
     std::string curPath;

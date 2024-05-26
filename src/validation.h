@@ -183,7 +183,7 @@ extern CAmount maxTxFee;
 extern int64_t nMaxTipAge;
 extern bool fEnableReplacement;
 /** contract state object. */
-extern ContractStateCache contractStateCache;
+extern ContractStateCache* contractStateCache;
 
 /** Block hash whose ancestors we will assume to have valid scripts without checking them. */
 extern uint256 hashAssumeValid;
