@@ -19,6 +19,5 @@ bitcoin-cli callcontract "$contract_address" "sign" "user1" "password1" "new mes
 bitcoin-cli callcontract "$contract_address" "sign" "user1" "password1" "new message2!!!"
 bitcoin-cli callcontract "$contract_address" "sign" "user2" "password2" "new message3!!!"
 bitcoin-cli generate 1
-bitcoin-cli dumpcontractmessage "$contract_address" "get"
 bitcoin-cli dumpcontractmessage "$contract_address" "readSign" "user1"
 bitcoin-cli dumpcontractmessage "$contract_address" "readSign" "user2"
