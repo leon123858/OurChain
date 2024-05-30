@@ -82,7 +82,8 @@ extern "C" int contract_main(void *arg)
     {
         group g;
         // write contract state
-        api->writeContractState(&json(g).dump());
+        std::string state = json(g).dump();
+        api->writeContractState(&state);
         return 0;
     }
     // execte command
@@ -106,7 +107,7 @@ extern "C" int contract_main(void *arg)
             return 0;
         }
         {
-            api->generalContractInterfaceOutput("aid02", "0.1.0");
+            api->generalContractInterfaceOutput("aid01", "0.2.0");
             return 0;
         }
     case Command::registerNewUser:
@@ -125,8 +126,8 @@ extern "C" int contract_main(void *arg)
             user u;
             u.password = contractArg->parameters[2];
             g.users[contractArg->parameters[1]] = u;
-            // write contract state
-            api->writeContractState(&json(g).dump());
+            std::string state = json(g).dump();
+            api->writeContractState(&state);
             return 0;
         }
     case Command::readSign:
@@ -143,7 +144,8 @@ extern "C" int contract_main(void *arg)
                 return 0;
             }
             user u = g.users[contractArg->parameters[1]];
-            api->writeContractState(&json(u.signedMessages).dump());
+            std::string state = json(u.signedMessages).dump();
+            api->writeContractState(&state);
             return 0;
         }
     case Command::sign:
@@ -167,8 +169,8 @@ extern "C" int contract_main(void *arg)
             }
             u.signedMessages.push_back(contractArg->parameters[3]);
             g.users[contractArg->parameters[1]] = u;
-            // write contract state
-            api->writeContractState(&json(g).dump());
+            std::string state = json(g).dump();
+            api->writeContractState(&state);
             return 0;
         }
     default:

@@ -1,7 +1,7 @@
 #ifndef CONTRACT_SERVER_H
 #define CONTRACT_SERVER_H
 
-#define CONTRACT_SERVER_THREADS 4
+#define CONTRACT_SERVER_THREADS 1
 
 #include <json/json.hpp>
 #include <mutex>

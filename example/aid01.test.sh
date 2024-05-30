@@ -6,6 +6,7 @@ deploycontract() {
     echo "$contract_address"
 }
 
+bitcoin-cli generate 3
 contract_address=$(deploycontract)
 echo "$contract_address"
 bitcoin-cli generate 1
@@ -14,3 +15,10 @@ bitcoin-cli callcontract "$contract_address" "registerNewUser" "user2" "password
 bitcoin-cli generate 1
 bitcoin-cli dumpcontractmessage "$contract_address" "get"
 bitcoin-cli dumpcontractmessage "$contract_address" "readSign" "user1"
+bitcoin-cli callcontract "$contract_address" "sign" "user1" "password1" "new message1!!!"
+bitcoin-cli callcontract "$contract_address" "sign" "user1" "password1" "new message2!!!"
+bitcoin-cli callcontract "$contract_address" "sign" "user2" "password2" "new message3!!!"
+bitcoin-cli generate 1
+bitcoin-cli dumpcontractmessage "$contract_address" "get"
+bitcoin-cli dumpcontractmessage "$contract_address" "readSign" "user1"
+bitcoin-cli dumpcontractmessage "$contract_address" "readSign" "user2"
