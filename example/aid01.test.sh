@@ -6,6 +6,8 @@ deploycontract() {
     echo "$contract_address"
 }
 
+bitcoind --regtest --daemon -txindex
+sleep 5
 bitcoin-cli generate 3
 contract_address=$(deploycontract)
 echo "$contract_address"
@@ -21,3 +23,4 @@ bitcoin-cli callcontract "$contract_address" "sign" "user2" "password2" "new mes
 bitcoin-cli generate 1
 bitcoin-cli dumpcontractmessage "$contract_address" "readSign" "user1"
 bitcoin-cli dumpcontractmessage "$contract_address" "readSign" "user2"
+bitcoin-cli stop
