@@ -93,13 +93,18 @@ static bool callContract(string* hex_ctid, ContractArguments* arg)
         LogPrintf("Failed to load contract: %s\n", dlerror());
         return false;
     }
-    int (*contract_main)(ContractArguments*) = (int (*)(ContractArguments*))dlsym(handle, "contract_main");
-    if (!contract_main) {
-        LogPrintf("Failed to load contract_main: %s\n", dlerror());
-        dlclose(handle);
-        return false;
-    }
     try {
+        dlerror();
+        int (*contract_main)(ContractArguments*) = (int (*)(ContractArguments*))dlsym(handle, "contract_main");
+        if (!contract_main) {
+            LogPrintf("Failed to load contract_main: %s\n", dlerror());
+            dlclose(handle);
+            return false;
+        }
+        auto error = dlerror();
+        if (error != nullptr) {
+            throw runtime_error("Contract dlsym failed");
+        }
         int ret = contract_main(arg);
         if (ret != 0) {
             throw runtime_error("Contract execution failed");
