@@ -332,15 +332,15 @@ bool startContractServer()
 
 bool stopContractServer()
 {
-    if (stopFlag.load() == false && server != nullptr) {
-        interruptContractServer();
-    }
-    if (!server->stop()) {
-        LogPrintf("failed to stop contract server\n");
-        return false;
-    }
-    delete server;
-    server = nullptr;
+    // if (stopFlag.load() == false && server != nullptr) {
+    //     interruptContractServer();
+    // }
+    // if (!server->stop()) {
+    //     LogPrintf("failed to stop contract server\n");
+    //     return false;
+    // }
+    // delete server;
+    // server = nullptr;
     return true;
 }
 
