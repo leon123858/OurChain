@@ -113,6 +113,10 @@ static bool callContract(string* hex_ctid, ContractArguments* arg)
         LogPrintf("Failed to get contract state: %s\n", e.what());
         dlclose(handle);
         return false;
+    } catch (...) {
+        LogPrintf("Failed to get contract state: unknown error\n");
+        dlclose(handle);
+        return false;
     }
     dlclose(handle);
     return true;
