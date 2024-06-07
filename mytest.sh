@@ -19,6 +19,7 @@ deploycontract() {
 make -j8 && make install && ldconfig
 ./src/bitcoind --regtest --daemon -txindex
 sleep 5
+./src/bitcoin-cli getbalance
 mining 11
 contract_address=$(deploycontract)
 echo "contract: $contract_address"

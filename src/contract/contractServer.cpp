@@ -131,9 +131,6 @@ ContractServer::ContractServer()
 
 ContractServer::~ContractServer()
 {
-    if (!threadPool.empty()) {
-        stop();
-    }
     LogPrintf("contract server destroyed\n");
 }
 
@@ -336,15 +333,17 @@ bool startContractServer()
 
 bool stopContractServer()
 {
-    // if (stopFlag.load() == false && server != nullptr) {
-    //     interruptContractServer();
-    // }
-    // if (!server->stop()) {
-    //     LogPrintf("failed to stop contract server\n");
-    //     return false;
-    // }
+    if (stopFlag.load() == false && server != nullptr) {
+        interruptContractServer();
+    }
+    if (!server->stop()) {
+        LogPrintf("failed to stop contract server\n");
+        return false;
+    }
     // delete server;
     // server = nullptr;
+
+    LogPrintf("contract server stopped\n");
     return true;
 }
 

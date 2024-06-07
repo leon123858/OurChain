@@ -165,7 +165,6 @@ static std::unique_ptr<ECCVerifyHandle> globalVerifyHandle;
 
 void Interrupt(boost::thread_group& threadGroup)
 {
-    interruptContractServer();
     InterruptHTTPServer();
     InterruptHTTPRPC();
     InterruptRPC();
@@ -174,6 +173,7 @@ void Interrupt(boost::thread_group& threadGroup)
     if (g_connman)
         g_connman->Interrupt();
     threadGroup.interrupt_all();
+    interruptContractServer();
 }
 
 void Shutdown()
@@ -191,11 +191,11 @@ void Shutdown()
     RenameThread("bitcoin-shutoff");
     mempool.AddTransactionsUpdated(1);
 
-    stopContractServer();
     StopHTTPRPC();
     StopREST();
     StopRPC();
     StopHTTPServer();
+    stopContractServer();
 #ifdef ENABLE_WALLET
     for (CWalletRef pwallet : vpwallets) {
         pwallet->Flush(false);
