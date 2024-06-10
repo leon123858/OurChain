@@ -17,3 +17,7 @@ See [doc/ourcontractV2.md](doc/ourcontractV2.md).
 - [OurChain Agent](https://github.com/leon123858/go-aid)
 - [OurChain Admin Web](https://github.com/leon123858/ourChain-frontend/tree/main/ourchain-web-cli)
 - [OurChain NFT Wallet Demo](https://github.com/leon123858/ourChain-frontend/tree/main/our-wallet-app)
+
+## note
+
+Please note that the terms "OurChain", "OurCoin" (or "ourcoin" for a unit of OurCoin), "OurContract", "AID", and "PowerTimestamp" are used throughout this project to refer to the specific implementations within this project and should not be confused with any other projects or terms that may share similar names.
