@@ -73,7 +73,7 @@ static void read_state_from_json(json j, int& flag, FILE* pipe_state_write)
 
 static void read_state_from_cache(ContractStateCache* cache, std::string& hex_ctid, int& flag, FILE* pipe_state_write)
 {
-    json j = cache->getSnapShot()->getContractState(uint256S(hex_ctid));
+    json j = cache->getSnapShot()->getContractState(hex_ctid);
     read_state_from_json(j, flag, pipe_state_write);
 }
 

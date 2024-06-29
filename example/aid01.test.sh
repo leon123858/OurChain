@@ -6,26 +6,21 @@ deploycontract() {
     echo "$contract_address"
 }
 
+bitcoind --regtest --daemon -txindex
+sleep 5
+bitcoin-cli generate 3
 contract_address=$(deploycontract)
 echo "$contract_address"
 bitcoin-cli generate 1
 bitcoin-cli callcontract "$contract_address" "registerNewUser" "user1" "password1"
+bitcoin-cli callcontract "$contract_address" "registerNewUser" "user2" "password2"
 bitcoin-cli generate 1
-bitcoin-cli dumpcontractmessage "$contract_address" "login" "user1" "password1" > log.txt
-user_address=$(grep "aid" log.txt | awk -F'"' '{print $4}')
-echo "$user_address"
-rm log.txt
-bitcoin-cli callcontract "$contract_address" "setCoin" "$user_address" "coin1"
-bitcoin-cli callcontract "$contract_address" "setCoin" "$user_address" "coin2"
-bitcoin-cli callcontract "$contract_address" "setCoin" "$user_address" "coin3"
-bitcoin-cli callcontract "$contract_address" "setCoin" "$user_address" "coin4"
-bitcoin-cli callcontract "$contract_address" "setCoin" "$user_address" "coin5"
-bitcoin-cli callcontract "$contract_address" "setCoin" "$user_address" "coin5"
+bitcoin-cli dumpcontractmessage "$contract_address" "get"
+bitcoin-cli dumpcontractmessage "$contract_address" "readSign" "user1"
+bitcoin-cli callcontract "$contract_address" "sign" "user1" "password1" "new message1!!!"
+bitcoin-cli callcontract "$contract_address" "sign" "user1" "password1" "new message2!!!"
+bitcoin-cli callcontract "$contract_address" "sign" "user2" "password2" "new message3!!!"
 bitcoin-cli generate 1
-bitcoin-cli dumpcontractmessage "$contract_address" "getCoins" "$user_address"
-bitcoin-cli callcontract "$contract_address" "removeCoin" "$user_address" "coin5"
-bitcoin-cli callcontract "$contract_address" "removeCoin" "$user_address" "coin4"
-bitcoin-cli callcontract "$contract_address" "removeCoin" "$user_address" "coin3"
-bitcoin-cli dumpcontractmessage "$contract_address" "getCoins" "$user_address"
-bitcoin-cli generate 1
-bitcoin-cli dumpcontractmessage "$contract_address" "getCoins" "$user_address"
+bitcoin-cli dumpcontractmessage "$contract_address" "readSign" "user1"
+bitcoin-cli dumpcontractmessage "$contract_address" "readSign" "user2"
+bitcoin-cli stop

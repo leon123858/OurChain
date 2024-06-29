@@ -7,7 +7,7 @@
 #include "base58.h"
 #include "chain.h"
 #include "consensus/validation.h"
-#include "contract/processing.h"
+#include "contract/updateStrategy.h"
 #include "core_io.h"
 #include "httpserver.h"
 #include "init.h"
@@ -28,6 +28,7 @@
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "warnings.h"
+#include "zmq.hpp"
 
 #include <fstream>
 #include <stdint.h>
@@ -3330,20 +3331,25 @@ UniValue dumpcontractmessage(const JSONRPCRequest& request)
     }
 
     // execute contract and get method output
-    uint256 contract_address = uint256S(request.params[0].get_str());
+    const std::string address_str = request.params[0].get_str();
     std::vector<std::string> args = {};
     if (request.params.size() > 1) {
         for (unsigned i = 1; i < request.params.size(); i++)
             args.push_back(request.params[i].get_str());
     }
     ReadLock r_lock(tmp_contract_db_mutex);
-    auto cache = ContractDBWrapper("tmp", "readOnly");
-    std::string buf = call_rt_pure(&cache, contract_address, args);
+    // use zmq send to contract
+    std::string buf;
+    auto msg = parseZmqMsg(true, address_str, args, "");
+    zmqPushMessage(msg, &buf);
     UniValue uv;
-    // const bool ok = uv.read(buf);
-    uv.read(buf);
+    const bool ok = uv.read(buf);
     r_lock.unlock();
-    // assert(ok); // when contract exe error, it will not OK, but it should still run
+    if (!ok) {
+        // set uv as {message: "return not json format"}
+        uv.setObject();
+        uv.pushKV("error", buf.c_str());
+    }
     return uv;
 }
 

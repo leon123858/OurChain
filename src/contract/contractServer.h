@@ -1,13 +1,48 @@
-#ifndef BITCOIN_CONTRACT_OURCONTRACT_H
-#define BITCOIN_CONTRACT_OURCONTRACT_H
+#ifndef CONTRACT_SERVER_H
+#define CONTRACT_SERVER_H
 
-#include <functional>
+#define CONTRACT_SERVER_THREADS 1
+
+#include <json/json.hpp>
 #include <mutex>
 #include <stack>
-#include <string>
+#include <thread>
 #include <vector>
+#include <zmq.hpp>
 
 using namespace std;
+
+class ContractServer
+{
+public:
+    ContractServer();
+    ~ContractServer();
+    bool start();
+    bool stop();
+    bool interrupt();
+
+private:
+    int numThreads;
+    vector<thread> threadPool;
+    thread proxyThreadInstance;
+
+    void workerThread();
+    void proxyThread();
+};
+
+extern ContractServer* server;
+
+struct zmqMsg {
+    string address;
+    vector<string> parameters;
+    bool isPure;
+    string preTxid;
+};
+
+bool contractServerInit();
+bool startContractServer();
+bool stopContractServer();
+bool interruptContractServer();
 
 // contract interface
 class ContractLocalState
@@ -60,4 +95,4 @@ struct ContractArguments {
     mutex* mtx;
 };
 
-#endif // BITCOIN_CONTRACT_OURCONTRACT_H
+#endif // CONTRACT_SERVER_H

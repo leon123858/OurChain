@@ -26,16 +26,17 @@ private:
     rocksdb::Status mystatus;
     rocksdb::WriteOptions writeOptions;
 
-    fs::path getContractDBPath(std::string name)
-    {
-        return GetDataDir() / "contracts" / name;
-    }
     // 保存當前狀態快照到目標位置
     void saveDuplicateState(fs::path path, std::string metadata);
 
 public:
+    fs::path getContractDBPath(std::string name)
+    {
+        return (GetDataDir() / "contracts" / name);
+    }
+
     std::string curPath;
-    const fs::path CheckPointPath = GetDataDir() / "contracts" / "checkPoint";
+    const fs::path CheckPointPath = getContractDBPath("checkPoint");
 
     // pre db operation status
     rocksdb::Status getStatus();

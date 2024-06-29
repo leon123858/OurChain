@@ -14,9 +14,9 @@ void SnapShot::setContractState(uint256 address, json state)
     dbWrapper->setState(address.ToString(), state.dump());
     assert(dbWrapper->isOk());
 }
-json SnapShot::getContractState(uint256 address)
+json SnapShot::getContractState(std::string address)
 {
-    std::string state = dbWrapper->getState(address.ToString());
+    std::string state = dbWrapper->getState(address);
     if (dbWrapper->isOk() == false)
         return nullptr;
     return json::parse(state);
@@ -36,7 +36,8 @@ ContractDBWrapper* SnapShot::getDBWrapper()
 
 BlockCache::BlockCache()
 {
-    dbWrapper = new ContractDBWrapper(std::string("block_index"));
+    auto path = std::string("block_index");
+    dbWrapper = new ContractDBWrapper(path);
 }
 BlockCache::~BlockCache()
 {
@@ -136,6 +137,11 @@ bool ContractStateCache::restoreCheckPoint(std::string tipBlockHash, std::vector
 void ContractStateCache::clearCheckPoint(int maxBlockCheckPointCount)
 {
     this->snapShot->getDBWrapper()->removeOldCheckPoint(maxBlockCheckPointCount);
+}
+
+fs::path ContractStateCache::getContractPath(std::string name)
+{
+    return snapShot->getDBWrapper()->getContractDBPath(name);
 }
 
 std::vector<CheckPointInfo> ContractStateCache::getCheckPointList()

@@ -1,46 +1,37 @@
 /*
 Leon Lin in Lab408, NTU CSIE, 2024/01/08
 
-AID01 Contract Implementation
+AID02 Contract Implementation
 
 FUNCTIONS
-PURE:login(name, password)
-// Returns the user information of name.
-PURE:verify(aid, password)
-// Returns if password is correct.
-registerNewUser(name, password)
+PURE:readSign(aid)
+sign(aid, password, message)
+registerNewUser(aid, password)
 
 COMMENTS
 only use password can not used in prod, but it's ok in this example
 
 */
 #include <ourcontract.h>
-#include <iostream>
 #include <json.hpp>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
+#include <string>
+#include <map>
 
 using json = nlohmann::json;
 
 enum Command
 {
     get,
-    login,
-    verify,
-    registerNewUser,
-    getCoins,
-    setCoin,
-    removeCoin,
+    readSign,
+    sign,
+    registerNewUser
 };
 
-static std::unordered_map<std::string, Command> const string2Command = {{"get", Command::get}, {"login", Command::login}, {"verify", Command::verify}, {"registerNewUser", Command::registerNewUser}, {"getCoins", Command::getCoins}, {"setCoin", Command::setCoin}, {"removeCoin", Command::removeCoin}};
+static std::unordered_map<std::string, Command> const string2Command = {
+    {"get", Command::get},
+    {"readSign", Command::readSign},
+    {"sign", Command::sign},
+    {"registerNewUser", Command::registerNewUser}};
 
 /**
  * data structure
@@ -48,28 +39,24 @@ static std::unordered_map<std::string, Command> const string2Command = {{"get", 
 
 struct user
 {
-    std::string aid;
-    std::string name;
     std::string password;
-    std::vector<std::string> coins;
+    std::vector<std::string> signedMessages;
 };
 
 struct group
 {
-    std::vector<user> users;
+    std::map<std::string, user> users;
 };
 
 void to_json(json &j, const user &p)
 {
-    j = json{{"aid", p.aid}, {"name", p.name}, {"password", p.password}, {"coins", p.coins}};
+    j = json{{"password", p.password}, {"signedMessages", p.signedMessages}};
 }
 
 void from_json(const json &j, user &p)
 {
-    j.at("aid").get_to(p.aid);
-    j.at("name").get_to(p.name);
     j.at("password").get_to(p.password);
-    j.at("coins").get_to(p.coins);
+    j.at("signedMessages").get_to(p.signedMessages);
 }
 
 void to_json(json &j, const group &p)
@@ -85,189 +72,109 @@ void from_json(const json &j, group &p)
 /**
  * Main
  */
-extern "C" int contract_main(int argc, char **argv)
+extern "C" int contract_main(void *arg)
 {
+    // cast argument
+    ContractArguments *contractArg = (ContractArguments *)arg;
+    ContractAPI *api = &contractArg->api;
     // init state
-    if (!state_exist())
+    if (api->readContractState() == "null")
     {
-        group newGroup;
-        state_write(newGroup);
-    }
-    // execute command
-    if (argc == 1)
-    {
-        std::cerr << "argc error" << std::endl;
+        group g;
+        // write contract state
+        std::string state = json(g).dump();
+        api->writeContractState(&state);
         return 0;
     }
-    std::string command = argv[1];
+    // execte command
+    if (contractArg->parameters.size() < 1)
+    {
+        api->contractLog("arg count error");
+        return 0;
+    }
+    std::string command = contractArg->parameters[0];
     auto eCommand = string2Command.find(command);
     if (eCommand == string2Command.end())
     {
-        std::cerr << "command error" << std::endl;
+        api->contractLog("command error");
         return 0;
     }
     switch (eCommand->second)
     {
     case Command::get:
-        if (check_runtime_can_write_db())
+        if (!contractArg->isPureCall)
         {
             return 0;
         }
         {
-            general_interface_write("aid", "0.0.1");
-            return 0;
-        }
-    case Command::login:
-        if (check_runtime_can_write_db())
-        {
-            return 0;
-        }
-        {
-            std::string name = argv[2];
-            std::string password = argv[3];
-            group curGroup = state_read();
-            for (auto &user : curGroup.users)
-            {
-                if (user.name == name && user.password == password)
-                {
-                    json tmp = json::object();
-                    tmp["isExist"] = true;
-                    tmp["aid"] = user.aid;
-                    tmp["name"] = user.name;
-                    state_write(tmp);
-                    return 0;
-                }
-            }
-            json tmp = json::object();
-            tmp["isExist"] = false;
-            state_write(tmp);
-            return 0;
-        }
-    case Command::verify:
-        if (check_runtime_can_write_db())
-        {
-            return 0;
-        }
-        {
-            std::string aid = argv[2];
-            std::string password = argv[3];
-            group curGroup = state_read();
-            for (auto &user : curGroup.users)
-            {
-                if (user.aid == aid)
-                {
-                    json tmp = json::object();
-                    tmp["isExist"] = true;
-                    if (user.password == password)
-                    {
-                        tmp["result"] = true;
-                    }
-                    else
-                    {
-                        tmp["result"] = false;
-                    }
-                    state_write(tmp);
-                    return 0;
-                }
-            }
-            json tmp = json::object();
-            tmp["isExist"] = false;
-            state_write(tmp);
+            api->generalContractInterfaceOutput("aid01", "0.2.0");
             return 0;
         }
     case Command::registerNewUser:
-        if (!check_runtime_can_write_db())
+        if (contractArg->isPureCall)
         {
             return 0;
         }
         {
-            std::string name = argv[2];
-            std::string password = argv[3];
-            group curGroup = state_read();
-            // create name generator
-            boost::uuids::uuid baseUUID = boost::uuids::string_generator()("00000000-0000-0000-0000-000000000000");
-            boost::uuids::name_generator gen(baseUUID);
-            std::string newAid = to_string(gen(get_pre_txid() + name)); // "f1669cf2-1d6e-539c-9955-526fdd9f09e3"
-            user newUser = user{newAid, name, password, std::vector<std::string>()};
-            curGroup.users.push_back(newUser);
-            state_write(curGroup);
-        }
-        break;
-    case Command::getCoins:
-        if (check_runtime_can_write_db())
-        {
-            return 0;
-        }
-        {
-            std::string aid = argv[2];
-            group curGroup = state_read();
-            for (auto &user : curGroup.users)
+            // 1: aid, 2: password
+            group g = json::parse(api->readContractState());
+            if (g.users.find(contractArg->parameters[1]) != g.users.end())
             {
-                if (user.aid == aid)
-                {
-                    json tmp = json::object();
-                    tmp["isExist"] = true;
-                    tmp["coins"] = user.coins;
-                    state_write(tmp);
-                    return 0;
-                }
+                api->contractLog("user exist");
+                return 0;
             }
-            json tmp = json::object();
-            tmp["isExist"] = false;
-            state_write(tmp);
-            break;
+            user u;
+            u.password = contractArg->parameters[2];
+            g.users[contractArg->parameters[1]] = u;
+            std::string state = json(g).dump();
+            api->writeContractState(&state);
+            return 0;
         }
-    case Command::setCoin:
-        if (!check_runtime_can_write_db())
+    case Command::readSign:
+        if (!contractArg->isPureCall)
         {
             return 0;
         }
         {
-            std::string aid = argv[2];
-            std::string coinAddress = argv[3];
-            group curGroup = state_read();
-            for (auto &user : curGroup.users)
+            // 1: aid
+            group g = json::parse(api->readContractState());
+            if (g.users.find(contractArg->parameters[1]) == g.users.end())
             {
-                if (user.aid == aid)
-                {
-                    user.coins.push_back(coinAddress);
-                    state_write(curGroup);
-                    return 0;
-                }
+                api->contractLog("user not exist");
+                return 0;
             }
-            break;
+            user u = g.users[contractArg->parameters[1]];
+            std::string state = json(u.signedMessages).dump();
+            api->writeContractState(&state);
+            return 0;
         }
-    case Command::removeCoin:
-        if (!check_runtime_can_write_db())
+    case Command::sign:
+        if (contractArg->isPureCall)
         {
             return 0;
         }
         {
-            std::string aid = argv[2];
-            std::string coinAddress = argv[3];
-            group curGroup = state_read();
-            for (auto &user : curGroup.users)
+            // 1: aid, 2: password, 3: message
+            group g = json::parse(api->readContractState());
+            if (g.users.find(contractArg->parameters[1]) == g.users.end())
             {
-                if (user.aid == aid)
-                {
-                    auto it = user.coins.begin();
-                    while (it != user.coins.end())
-                    {
-                        if (*it == coinAddress)
-                        {
-                            it = user.coins.erase(it);
-                        }
-                        else
-                        {
-                            ++it;
-                        }
-                    }
-                    state_write(curGroup);
-                    return 0;
-                }
+                api->contractLog("user not exist");
+                return 0;
             }
-            break;
+            user u = g.users[contractArg->parameters[1]];
+            if (u.password != contractArg->parameters[2])
+            {
+                api->contractLog("password error");
+                return 0;
+            }
+            u.signedMessages.push_back(contractArg->parameters[3]);
+            g.users[contractArg->parameters[1]] = u;
+            std::string state = json(g).dump();
+            api->writeContractState(&state);
+            return 0;
         }
+    default:
+        return 0;
     }
     return 0;
 }

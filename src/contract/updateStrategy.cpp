@@ -1,6 +1,56 @@
 #include "contract/updateStrategy.h"
 #include "contract/processing.h"
+#include <boost/asio.hpp>
+#include <future>
 #include <stack>
+#include <sys/wait.h>
+#include <zmq.hpp>
+
+static fs::path contracts_dir;
+
+const static fs::path& GetContractsDir()
+{
+    if (!contracts_dir.empty()) return contracts_dir;
+
+    contracts_dir = GetDataDir() / "contracts";
+    fs::create_directories(contracts_dir);
+
+    return contracts_dir;
+}
+
+std::string parseZmqMsg(bool isPure, const std::string& address, vector<string> parameters, std::string preTxid)
+{
+    json j;
+    j["isPure"] = isPure;
+    j["address"] = address;
+    j["parameters"] = parameters;
+    j["preTxid"] = preTxid;
+    return j.dump();
+}
+
+void zmqPushMessage(const std::string& message, std::string* buf)
+{
+    zmq::context_t context(1);
+    zmq::socket_t pusher(context, zmq::socket_type::req);
+    pusher.connect("tcp://127.0.0.1:5559");
+    // send message
+    zmq::message_t zmq_message(message.size());
+    memcpy(zmq_message.data(), message.data(), message.size());
+    if (!pusher.send(zmq_message, zmq::send_flags::none)) {
+        LogPrintf("send message error\n");
+    }
+    // receive response
+    zmq::message_t response;
+    if (!pusher.recv(response, zmq::recv_flags::none)) {
+        LogPrintf("receive response error\n");
+    }
+    std::string recv_msg(static_cast<char*>(response.data()), response.size());
+    LogPrintf("Contract Received response: %s\n", recv_msg.c_str());
+    if (buf != nullptr) {
+        *buf = recv_msg;
+    }
+    pusher.close();
+}
 
 static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCache& cache, const Consensus::Params consensusParams)
 {
@@ -11,11 +61,58 @@ static bool processContracts(std::stack<CBlockIndex*> realBlock, ContractStateCa
         if (!ReadBlockFromDisk(*block, tmpBlock, consensusParams)) {
             return false;
         }
+        // init tp
+        boost::asio::thread_pool pool(4);
+        // put task to thread pool
         for (const CTransactionRef& tx : block->vtx) {
-            if (!ProcessContract(tx.get()->contract, tx, &cache)) {
-                LogPrintf("contract process error: %s\n", tx.get()->contract.address.ToString());
+            if (tx.get()->contract.action == contract_action::ACTION_NONE) {
+                continue;
             }
+            if (tx.get()->contract.action == contract_action::ACTION_NEW) {
+                boost::asio::post(pool, [tx, &cache]() {
+                    auto contract = tx.get()->contract;
+                    // contract address
+                    fs::path new_dir = GetContractsDir() / contract.address.GetHex();
+                    fs::create_directories(new_dir);
+                    std::ofstream contract_code(new_dir.string() + "/code.cpp");
+                    contract_code.write(contract.code.c_str(), contract.code.size());
+                    contract_code.close();
+                    // compile contract
+                    int pid, status;
+                    pid = fork();
+                    if (pid == 0) {
+                        int fd = open((GetContractsDir().string() + "/err").c_str(),
+                            O_WRONLY | O_APPEND | O_CREAT,
+                            0664);
+                        dup2(fd, STDERR_FILENO);
+                        close(fd);
+                        execlp("ourcontract-mkdll",
+                            "ourcontract-mkdll",
+                            GetContractsDir().string().c_str(),
+                            contract.address.GetHex().c_str(),
+                            NULL);
+                        exit(EXIT_FAILURE);
+                    }
+                    waitpid(pid, &status, 0);
+                    if (WIFEXITED(status) == false || WEXITSTATUS(status) != 0) {
+                        LogPrintf("compile contract %s error\n", contract.address.GetHex());
+                    }
+                    // execute contract
+                    string preTxid = tx.get()->GetHash().GetHex();
+                    zmqPushMessage(parseZmqMsg(false, contract.address.GetHex(), contract.args, preTxid), nullptr);
+                });
+                continue;
+            }
+            assert(tx.get()->contract.action == contract_action::ACTION_CALL);
+            boost::asio::post(pool, [tx, &cache]() {
+                auto contract = tx.get()->contract;
+                // exe contract
+                string preTxid = tx.get()->GetHash().GetHex();
+                zmqPushMessage(parseZmqMsg(false, contract.address.GetHex(), contract.args, preTxid), nullptr);
+            });
         }
+        pool.join();
+        // release memory
         delete block;
     }
     return true;

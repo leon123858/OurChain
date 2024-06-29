@@ -4,7 +4,8 @@ FROM ubuntu:22.04
 RUN apt-get update -y
 
 # install dev tools (only for development)
-# RUN apt-get install vim gdb -y
+RUN apt-get install vim gdb -y
+RUN apt-get install software-properties-common -y
 
 # install git
 RUN apt-get install git -y
@@ -22,12 +23,9 @@ RUN cd ~ && rm -rf rocksdb
 # git clone ourchain
 ARG REPO_URL=https://github.com/leon123858/OurChain.git
 ARG REPO_NAME=OurChain
-ARG REPO_BRANCH=main
+ARG REPO_BRANCH=stage
 RUN cd ~ && mkdir Desktop && cd Desktop && git clone $REPO_URL && mv $REPO_NAME ourchain && cd ourchain && git checkout $REPO_BRANCH && git pull
 WORKDIR /root/Desktop/ourchain
-
-# install redundant dependencies (only for development)
-# RUN apt-get install software-properties-common -y
 
 # install bitcoin optional dependencies
 RUN apt-get install libzmq3-dev -y
@@ -41,7 +39,7 @@ EXPOSE 8332
 
 # init
 RUN ~/Desktop/ourchain/autogen.sh
-RUN ~/Desktop/ourchain/configure --without-gui --with-incompatible-bdb
+RUN ~/Desktop/ourchain/configure --without-gui --with-incompatible-bdb --disable-tests --disable-bench
 
 # set config
 RUN mkdir ~/.bitcoin/

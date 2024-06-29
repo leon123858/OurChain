@@ -24,14 +24,6 @@ extern "C" int contract_main(void *arg)
     else
     {
       // pure operation
-      string state = api->readContractState();
-      json j = json::parse(state);
-      contractArg->mtx->lock();
-      j.push_back("pure click: " + std::to_string((size_t)j.size()));
-      contractArg->mtx->unlock();
-      // pure output
-      state = j.dump();
-      api->writeContractState(&state);
       return 0;
     }
   }
@@ -40,21 +32,16 @@ extern "C" int contract_main(void *arg)
   // deploy contract init call
   if (state == "null")
   {
-    json j;
-    j.push_back("baby cute");
-    j.push_back(1);
-    j.push_back(true);
+    json j = json::object();
+    j["click"] = 0;
     // write contract state
     state = j.dump();
     api->writeContractState(&state);
     return 0;
   }
   json j = json::parse(state);
-  j.push_back("more click: " + std::to_string((size_t)j.size()));
-  // write contract state
+  j["click"] = j["click"].get<int>() + 1;
   state = j.dump();
   api->writeContractState(&state);
-  // log pre txid
-  api->contractLog("pre txid: " + contractArg->preTxid);
   return 0;
 }
