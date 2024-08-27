@@ -26,7 +26,7 @@ docker run --name our-chain -it -p 8332:8332 our-chain
 設置環境變數與啟動測試
 
 ```bash
-# 啟動 (BUG:會遇到吃不到代碼更新, 所以直接執行 local) 
+# 啟動 (BUG:會遇到吃不到代碼更新, 所以直接執行 local)
 ./src/bitcoind --regtest --daemon -txindex
 # 停止
 ./src/bitcoin-cli stop
@@ -105,6 +105,30 @@ docker start [CONTAINER ID]
 "cppStandard": "gnu++17",
 // 要用的編譯器
 "intelliSenseMode": "clang-arm64"
+```
+
+## 參考用開發配置(bitcoin.conf)
+
+若是需要客製化配置可以在 `.bitcoin` 下的設置檔自行修改配置，以下為預設配置
+
+```
+server=1
+rpcuser=test
+rpcpassword=test
+rpcport=8332
+rpcallowip=0.0.0.0/0
+regtest=1
+```
+
+## 參考用發布腳本
+
+利用 docker buildx 進行多平台發布，請確保使用有權限的 docker 帳號
+
+```bash
+git pull
+docker buildx build --no-cache -t our-chain -f ./Dockerfile.prod --platform linux/amd64 .
+docker tag our-chain your_docker_hub_id/our-chain
+docker push your_docker_hub_id/our-chain
 ```
 
 ## 刪除
