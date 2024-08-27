@@ -14,7 +14,7 @@ See [doc/ourcontractV2.md](doc/ourcontractV2.md).
 
 ## 相關專案
 
-- [OurChain Agent](https://github.com/leon123858/go-aid)
+- [OurChain Agent](https://github.com/leon123858/ourchain-agent)
 - [OurChain Admin Web](https://github.com/leon123858/ourChain-frontend/tree/main/ourchain-web-cli)
 - [OurChain NFT Wallet Demo](https://github.com/leon123858/ourChain-frontend/tree/main/our-wallet-app)
 

@@ -48,8 +48,4 @@ rm -f "./aid.o"
 
 ### 外部 API 串接
 
-請看 [our contract agent](https://github.com/leon123858/go-aid)
-
-
-
-
+請看 [our contract agent](https://github.com/leon123858/ourchain-agent)
