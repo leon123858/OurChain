@@ -4,6 +4,10 @@ The goal of this project is to bring better performance and features to the bloc
 
 All of the work is currently based on Bitcoin source code.
 
+## Quick Start
+
+use `bash mytest.sh` to try basic contract rpc commands.
+
 ## Dev By Docker
 
 See [doc/dev-docker.md](doc/dev-docker.md).

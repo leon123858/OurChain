@@ -26,7 +26,7 @@ docker run --name our-chain -it -p 8332:8332 our-chain
 設置環境變數與啟動測試
 
 ```bash
-# 啟動 (BUG:會遇到吃不到代碼更新, 所以直接執行 local) 
+# 啟動 (BUG:會遇到吃不到代碼更新, 所以直接執行 local)
 ./src/bitcoind --regtest --daemon -txindex
 # 停止
 ./src/bitcoin-cli stop
@@ -118,6 +118,17 @@ rpcpassword=test
 rpcport=8332
 rpcallowip=0.0.0.0/0
 regtest=1
+```
+
+## 參考用發布腳本
+
+利用 docker buildx 進行多平台發布，請確保使用有權限的 docker 帳號
+
+```bash
+git pull
+docker buildx build --no-cache -t our-chain -f ./Dockerfile.prod --platform linux/amd64 .
+docker tag our-chain your_docker_hub_id/our-chain
+docker push your_docker_hub_id/our-chain
 ```
 
 ## 刪除
