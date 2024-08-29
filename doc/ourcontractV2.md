@@ -42,10 +42,6 @@ g++ -shared -Wl,-soname,"aid.so" -o "./aid.so" "./aid.o" -lssl -lcrypto
 rm -f "./aid.o"
 ```
 
-### 外部 API 串接
-
-請看 [our contract agent](https://github.com/leon123858/ourchain-agent)
-
 ### 進階範例合約
 
 以下為建議 OurContract 合約語法，利用以下語法可以組織出較為複雜的合約。更可以利用合約 API:`recursiveCall` 來拆分不同的邏輯到不同的合約中，並且同時呼叫。
