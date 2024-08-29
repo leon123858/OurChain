@@ -2,6 +2,8 @@
 src/ourcontract-rt
 .vscode/*.vc.*
 
+.idea/
+
 *.exe
 src/bitcoin
 src/bitcoind

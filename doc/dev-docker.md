@@ -107,6 +107,19 @@ docker start [CONTAINER ID]
 "intelliSenseMode": "clang-arm64"
 ```
 
+## 參考用開發配置(bitcoin.conf)
+
+若是需要客製化配置可以在 `.bitcoin` 下的設置檔自行修改配置，以下為預設配置
+
+```
+server=1
+rpcuser=test
+rpcpassword=test
+rpcport=8332
+rpcallowip=0.0.0.0/0
+regtest=1
+```
+
 ## 刪除
 
 請利用 docker desktop 照直覺操作即可
